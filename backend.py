@@ -15,7 +15,33 @@ import math
 
 #algoritmos y estructura de datos
 ###diccionario master####
-informacion = {}
+informacion = {
+    "julio": ("a1", "b2", "c3", "d4", "1001", "no", "no", "oño", "ono"),
+    "julo": ("x1", "y2", "z3", "p9", "2002", "si", "no", "uno", "una"),
+    "julian": ("k1", "k2", "k3", "k4", "3003", "no", "si", "dos", "dos"),
+    "julia": ("m1", "m2", "m3", "m4", "4004", "si", "si", "tres", "tres"),
+    "julieta": ("q1", "q2", "q3", "q4", "5005", "no", "no", "cuatro", "cuatro"),
+    
+    "juan": ("u1", "u2", "u3", "u4", "6006", "si", "no", "cinco", "cinco"),
+    "juam": ("v1", "v2", "v3", "v4", "6007", "no", "si", "seis", "seis"),
+    "juán": ("w1", "w2", "w3", "w4", "6008", "si", "si", "siete", "siete"),
+    
+    "maria": ("r1", "r2", "r3", "r4", "7007", "no", "no", "ocho", "ocho"),
+    "maría": ("s1", "s2", "s3", "s4", "7008", "si", "no", "nueve", "nueve"),
+    "marya": ("t1", "t2", "t3", "t4", "7009", "no", "si", "diez", "diez"),
+    
+    "pedro": ("p1", "p2", "p3", "p4", "8008", "si", "no", "once", "once"),
+    "petero": ("p5", "p6", "p7", "p8", "8009", "no", "si", "doce", "doce"),
+    "pedroa": ("p9", "p10", "p11", "p12", "8010", "si", "si", "trece", "trece"),
+    
+    "carlos": ("c1", "c2", "c3", "c4", "9009", "no", "no", "catorce", "catorce"),
+    "carlo": ("c5", "c6", "c7", "c8", "9010", "si", "no", "quince", "quince"),
+    "karlo": ("c9", "c10", "c11", "c12", "9011", "no", "si", "dieciseis", "dieciseis"),
+    
+    "andres": ("a10", "a11", "a12", "a13", "1111", "si", "no", "diecisiete", "diecisiete"),
+    "andrez": ("a14", "a15", "a16", "a17", "1112", "no", "si", "dieciocho", "dieciocho"),
+    "andre": ("a18", "a19", "a20", "a21", "1113", "si", "si", "diecinueve", "diecinueve"),
+}
 
 ####trie para el nombre####
 class NodoTrie:
@@ -73,22 +99,17 @@ def texto_a_vector(texto, n=3):
 
 ####producto coseno par sugerencias###
 def similitud_coseno(vec_a, vec_b):
-    """
-    Calcula el coseno del ángulo entre dos vectores.
-    Resultado: 0.0 (nada parecidos) a 1.0 (idénticos)
-    """
-    # Producto punto: suma de (frecuencia_a * frecuencia_b) por cada palabra común
-    palabras_comunes = set(vec_a.keys()) & set(vec_b.keys())
-    producto_punto = sum(vec_a[p] * vec_b[p] for p in palabras_comunes)
+    interseccion = set(vec_a) & set(vec_b)
 
-    # Magnitud de cada vector: raíz de la suma de cuadrados
-    magnitud_a = math.sqrt(sum(v**2 for v in vec_a.values()))
-    magnitud_b = math.sqrt(sum(v**2 for v in vec_b.values()))
+    num = sum(vec_a[x] * vec_b[x] for x in interseccion)
 
-    if magnitud_a == 0 or magnitud_b == 0:
-        return 0.0
+    denom_a = math.sqrt(sum(v*v for v in vec_a.values()))
+    denom_b = math.sqrt(sum(v*v for v in vec_b.values()))
 
-    return producto_punto / (magnitud_a * magnitud_b)
+    if denom_a == 0 or denom_b == 0:
+        return 0
+
+    return num / (denom_a * denom_b)
 
 
 
@@ -100,27 +121,49 @@ def similitud_coseno(vec_a, vec_b):
 #pagina principal
 
 #barra de busqueda input para el nombre y que al poner tipo yape busque y si no hay coincidencia sugiera crear 
-
-nomb = str(input("Nombre del paciente: "))
-
+####################################################
+####nomb = str(input("Nombre del paciente: "))######
+####################################################
 def buscar(trie, catalogo, query):
-    # Paso 1: el Trie filtra candidatos por prefijo (rápido)
+
     palabras_query = query.lower().split()
+
+    # -------------------------
+    # 1. FILTRO TRIE
+    # -------------------------
     candidatos = set()
     for palabra in palabras_query:
         candidatos.update(trie.sugerir(palabra))
 
-    # Paso 2: el coseno rankea los candidatos por similitud (preciso)
+    # -------------------------
+    # 2. VECTOR QUERY (n-gramas)
+    # -------------------------
     vec_query = texto_a_vector(query)
-    resultados = []
-    for item in catalogo:
-        # solo procesar ítems que contienen alguna palabra del Trie
-        if any(c in item.lower() for c in candidatos):
-            score = similitud_coseno(vec_query, texto_a_vector(item))
-            resultados.append((score, item))
 
-    # Paso 3: ordenar de mayor a menor similitud
+    resultados = []
+
+    # -------------------------
+    # 3. FILTRADO + COSENO
+    # -------------------------
+    for item in catalogo:
+        item_lower = item.lower()
+
+        # fallback importante:
+        # si no hay candidatos, no bloquear búsqueda
+        if candidatos:
+            if not any(c in item_lower for c in candidatos):
+                continue
+
+        vec_item = texto_a_vector(item)
+
+        score = similitud_coseno(vec_query, vec_item)
+        resultados.append((score, item))
+
+    # -------------------------
+    # 4. ORDENAR
+    # -------------------------
     resultados.sort(reverse=True)
+
     return [item for score, item in resultados if score > 0]
 
 def crear():
@@ -134,7 +177,6 @@ def crear():
     antecedentes = str(input("antecedentes del paciente: "))
     edad = str(input("edad del paciente: "))
 
-    trie = Trie()
     trie.insertar(nomb)
 
     informacion[nomb] = (fecha, procedimiento, nro_sesiones, proxima_sesion, nro_whatsapp, tiene_diabetes, tiene_hipertension, 
@@ -142,8 +184,17 @@ def crear():
     
     return informacion[nomb]
 
-crear()
-print(informacion)
+
+
+
+
+###uso del programa###
+
+trie = Trie()
+query = str(input("introduce el nombre que deseas buscar"))
+#crear()
+resultados = buscar(trie, list(informacion.keys()), query)
+print(resultados)
 
 #mostrar por fecha esta semana que pacientes tienen consulta y su hora 
 
@@ -151,45 +202,3 @@ print(informacion)
 
 #opcion de mostrar en pantalla informacion del paciente
 #aun no
-
-
-
-#para la busqueda y sugerencia nos vendrian bien los tries y el producto del coceno, entonces haremos uso de ellos en esta seccion
-#crear entorno de conda para la version de python y las librerias a usar
-
-
-####uso<###
-
-for palabra in ["archivo", "árbol", "arte", "artículo", "búsqueda"]:
-    trie.insertar(palabra)
-
-print(trie.sugerir("art"))  # ['arte', 'artículo']
-print(trie.sugerir("ar"))   # ['archivo', 'árbol', 'arte', 'artículo']
-
-####producto del coceno#####
-
-
-###uso
-###
-
-query = "editor de texto"
-documentos = [
-    "editor de código fuente",
-    "visor de imágenes",
-    "editor de texto enriquecido",
-    "reproductor de audio",
-]
-
-vec_query = texto_a_vector(query)
-
-for doc in documentos:
-    score = similitud_coseno(vec_query, texto_a_vector(doc))
-    print(f"{score:.2f} → {doc}")
-
-# 0.82 → editor de texto enriquecido
-# 0.41 → editor de código fuente
-# 0.00 → visor de imágenes
-# 0.00 → reproductor de audio
-
-####combinados###
-
