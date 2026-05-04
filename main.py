@@ -132,15 +132,28 @@ def similitud_coseno(a, b):
         return 0
     return num/(den_a*den_b)
  
+def catalogo_nombres():
+    cursor.execute("SELECT nombre FROM productos")
+    nombres_db = [r[0] for r in cursor.fetchall()]
+    return sorted(set(list(informacion.keys()) + nombres_db))
+
+
 def buscar(query):
+    query = query.strip()
+    if not query:
+        return []
+
     vec_q = texto_a_vector(query)
     resultados = []
-    for item in informacion:
+
+    for item in catalogo_nombres():
         vec_item = texto_a_vector(item)
         score = similitud_coseno(vec_q, vec_item)
         if score > 0:
             resultados.append((score, item))
+
     resultados.sort(reverse=True)
+
     nombres = [r[1] for r in resultados]
     nombres.insert(0, f"➕ Crear '{query}'")
     return nombres
@@ -157,6 +170,105 @@ def home():
 def buscar_api(q: str = ""):
     return buscar(q)
  
+@app.get("/paciente")
+def obtener_paciente(nombre: str):
+    cursor.execute("SELECT * FROM productos WHERE nombre = ?", (nombre,))
+    row = cursor.fetchone()
+
+    if not row:
+        return {"error": "No encontrado"}
+
+    keys = [
+        "nombre", "fecha", "procedimiento", "nro_sesiones",
+        "nro_whatsapp", "tiene_diabetes", "tiene_hipertension",
+        "antecedentes", "edad"
+    ]
+    paciente = dict(zip(keys, row))
+
+    cursor.execute("""
+        SELECT fecha_sesion, hora_inicio, duracion_minutos, procedimiento, notas, estado
+        FROM sesiones
+        WHERE nombre_paciente = ?
+        ORDER BY fecha_sesion, hora_inicio
+    """, (nombre,))
+    filas = cursor.fetchall()
+
+    sesiones = []
+    for f in filas:
+        sesiones.append({
+            "fecha_sesion": f[0],
+            "hora_inicio": f[1],
+            "duracion_minutos": f[2],
+            "procedimiento": f[3] or "",
+            "notas": f[4] or "",
+            "estado": f[5]
+        })
+
+    return {
+        "paciente": paciente,
+        "sesiones": sesiones
+    }
+
+@app.post("/crear_paciente")
+def crear_paciente(data: dict):
+    try:
+        nombre = data.get("nombre", "").strip()
+        if not nombre:
+            raise HTTPException(status_code=400, detail="El nombre es obligatorio")
+
+        nro_sesiones = int(data.get("nro_sesiones", 0))
+        edad = int(data.get("edad", 0))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Sesiones y edad deben ser números")
+
+    fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    cursor.execute("""
+        INSERT OR REPLACE INTO productos
+        (nombre, fecha, procedimiento, nro_sesiones, nro_whatsapp, tiene_diabetes, tiene_hipertension, antecedentes, edad)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        nombre,
+        fecha,
+        data.get("procedimiento", ""),
+        nro_sesiones,
+        data.get("nro_whatsapp", ""),
+        data.get("tiene_diabetes", ""),
+        data.get("tiene_hipertension", ""),
+        data.get("antecedentes", ""),
+        edad
+    ))
+
+    fecha_sesion = data.get("fecha_sesion", "").strip()
+    hora_inicio = data.get("hora_inicio", "").strip()
+    duracion_minutos = data.get("duracion_minutos", "").strip()
+    notas = data.get("notas", "").strip()
+
+    if fecha_sesion and hora_inicio:
+        try:
+            duracion_minutos = int(duracion_minutos or 60)
+        except ValueError:
+            duracion_minutos = 60
+
+        cursor.execute("""
+            INSERT INTO sesiones
+            (nombre_paciente, fecha_sesion, hora_inicio, duracion_minutos, procedimiento, notas, estado)
+            VALUES (?, ?, ?, ?, ?, ?, 'pendiente')
+        """, (
+            nombre,
+            fecha_sesion,
+            hora_inicio,
+            duracion_minutos,
+            data.get("procedimiento", ""),
+            notas
+        ))
+
+    conexion.commit()
+    trie.insertar(nombre)
+    informacion[nombre] = ()
+
+    return {"ok": True, "nombre": nombre}
+
 @app.get("/calendario")
 def calendario_api(fecha_inicio: str = ""):
     """

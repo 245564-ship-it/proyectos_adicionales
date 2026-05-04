@@ -51,6 +51,16 @@
   </div>
 </div>
 
+<!-- ============================
+     MODAL PACIENTE / CREAR
+============================= -->
+<div id="modal" class="modal hidden">
+  <div class="modal-content">
+    <span class="closeBtn" id="closeBtn">✖</span>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
 <!-- Popup de sesión -->
 <div class="sesion-popup" id="sesion-popup">
   <div class="sp-nombre" id="sp-nombre"></div>
@@ -82,6 +92,21 @@ let colorIdx = 0;
 const input = document.getElementById("search");
 const resultados = document.getElementById("resultados");
 
+const modal = document.getElementById("modal");
+const modalBody = document.getElementById("modalBody");
+const closeBtn = document.getElementById("closeBtn");
+
+function cerrarModal() {
+  modal.classList.add("hidden");
+  modalBody.innerHTML = "";
+}
+
+closeBtn.addEventListener("click", cerrarModal);
+
+modal.addEventListener("click", (e) => {
+  if (e.target === modal) cerrarModal();
+});
+
 input.addEventListener("input", async () => {
   let query = input.value;
   if (!query) { resultados.innerHTML = ""; return; }
@@ -93,17 +118,139 @@ input.addEventListener("input", async () => {
     div.className = "item";
     div.innerText = item;
     div.onclick = () => {
-      if (item.startsWith("➕")) {
-        alert("Crear paciente: " + query);
-      } else {
-        alert("Seleccionado: " + item);
-      }
-      resultados.innerHTML = "";
-      input.value = "";
+        abrirModal(item, query);
+        resultados.innerHTML = "";
+        input.value = "";
     };
     resultados.appendChild(div);
   });
 });
+
+async function abrirModal(item, query) {
+  modal.classList.remove("hidden");
+
+  if (item.startsWith("➕")) {
+    modalBody.innerHTML = `
+      <h2>Crear Paciente</h2>
+
+      <form id="formCrear" class="form-grid">
+        <div class="form-span-2">
+          <input name="nombre" placeholder="Nombre" value="${query}" required>
+        </div>
+
+        <input name="procedimiento" placeholder="Procedimiento" required>
+        <input name="nro_sesiones" type="number" min="0" placeholder="Nro sesiones" required>
+
+        <input name="nro_whatsapp" placeholder="WhatsApp">
+        <input name="edad" type="number" min="0" placeholder="Edad" required>
+
+        <input name="tiene_diabetes" placeholder="Diabetes (si/no)">
+        <input name="tiene_hipertension" placeholder="Hipertensión (si/no)">
+
+        <div class="form-span-2">
+          <input name="antecedentes" placeholder="Antecedentes">
+        </div>
+
+        <div class="form-span-2">
+          <h3>Primera sesión (opcional)</h3>
+        </div>
+
+        <input name="fecha_sesion" type="date">
+        <input name="hora_inicio" type="time">
+        <input name="duracion_minutos" type="number" min="15" value="60" placeholder="Duración min">
+
+        <div class="form-span-2">
+          <input name="notas" placeholder="Notas">
+        </div>
+
+        <div class="form-actions form-span-2">
+          <button type="button" id="btnCancelar">Cancelar</button>
+          <button type="submit">Guardar</button>
+        </div>
+      </form>
+    `;
+
+    document.getElementById("btnCancelar").onclick = cerrarModal;
+
+    document.getElementById("formCrear").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = e.currentTarget;
+
+      const data = {
+        nombre: f.nombre.value,
+        procedimiento: f.procedimiento.value,
+        nro_sesiones: f.nro_sesiones.value,
+        nro_whatsapp: f.nro_whatsapp.value,
+        edad: f.edad.value,
+        tiene_diabetes: f.tiene_diabetes.value,
+        tiene_hipertension: f.tiene_hipertension.value,
+        antecedentes: f.antecedentes.value,
+        fecha_sesion: f.fecha_sesion.value,
+        hora_inicio: f.hora_inicio.value,
+        duracion_minutos: f.duracion_minutos.value,
+        notas: f.notas.value
+      };
+
+      const res = await fetch("/crear_paciente", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.detail || "No se pudo guardar");
+        return;
+      }
+
+      cerrarModal();
+      await actualizar();
+    });
+
+    return;
+  }
+
+  const res = await fetch(`/paciente?nombre=${encodeURIComponent(item)}`);
+  const data = await res.json();
+
+  if (data.error) {
+    modalBody.innerHTML = `<p>No encontrado.</p>`;
+    return;
+  }
+
+  const p = data.paciente;
+  const sesiones = data.sesiones || [];
+
+  modalBody.innerHTML = `
+    <h2>${p.nombre}</h2>
+
+    <div class="datos-paciente">
+      <p><b>Fecha:</b> ${p.fecha}</p>
+      <p><b>Procedimiento:</b> ${p.procedimiento}</p>
+      <p><b>Nro sesiones:</b> ${p.nro_sesiones}</p>
+      <p><b>WhatsApp:</b> ${p.nro_whatsapp}</p>
+      <p><b>Diabetes:</b> ${p.tiene_diabetes}</p>
+      <p><b>Hipertensión:</b> ${p.tiene_hipertension}</p>
+      <p><b>Antecedentes:</b> ${p.antecedentes}</p>
+      <p><b>Edad:</b> ${p.edad}</p>
+    </div>
+
+    <h3>Sesiones</h3>
+    ${
+      sesiones.length
+        ? sesiones.map(s => `
+            <div class="sesion-item">
+              <p><b>Fecha:</b> ${s.fecha_sesion}</p>
+              <p><b>Hora:</b> ${s.hora_inicio}</p>
+              <p><b>Duración:</b> ${s.duracion_minutos} min</p>
+              <p><b>Procedimiento:</b> ${s.procedimiento || "—"}</p>
+              <p><b>Notas:</b> ${s.notas || "—"}</p>
+            </div>
+          `).join("")
+        : "<p>No hay sesiones registradas.</p>"
+    }
+  `;
+}
 
 document.addEventListener("click", (e) => {
   if (!e.target.closest(".container")) {
