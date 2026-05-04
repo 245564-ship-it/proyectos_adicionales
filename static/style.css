@@ -1,23 +1,55 @@
+/* ========================
+   BASE & RESET
+======================== */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+ 
 body {
-    font-family: Arial;
+    font-family: 'DM Sans', Arial, sans-serif;
     background: #f1f3f4;
+    min-height: 100vh;
+}
+ 
+/* ========================
+   BARRA DE BUSQUEDA — sin cambios
+======================== */
+.search-wrapper {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
     display: flex;
     justify-content: center;
-    margin-top: 100px;
+    padding: 18px 20px 0;
+    pointer-events: none;
 }
-
+ 
 .container {
     width: 700px;
+    pointer-events: all;
 }
-
+ 
 #search {
     width: 100%;
     padding: 16px;
     font-size: 20px;
     border-radius: 30px;
     border: 1px solid #ccc;
+    background: #fff;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    outline: none;
+    transition: box-shadow 0.2s;
 }
-
+ 
+#search:focus {
+    box-shadow: 0 4px 20px rgba(0,0,0,0.14);
+    border-color: #aaa;
+}
+ 
 #resultados {
     background: white;
     margin-top: 5px;
@@ -25,12 +57,308 @@ body {
     box-shadow: 0px 5px 15px rgba(0,0,0,0.1);
     overflow: hidden;
 }
-
+ 
 .item {
     padding: 14px;
     cursor: pointer;
+    font-size: 16px;
 }
-
+ 
 .item:hover {
     background: #e8f0fe;
 }
+ 
+/* ========================
+   CALENDARIO — LAYOUT PRINCIPAL
+======================== */
+.calendario-layout {
+    padding-top: 88px; /* espacio para la barra fija */
+    padding-left: 20px;
+    padding-right: 20px;
+    padding-bottom: 20px;
+    min-height: 100vh;
+}
+ 
+.cal-card {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+    overflow: hidden;
+}
+ 
+/* ========================
+   CABECERA CALENDARIO
+======================== */
+.cal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid #e8e8e8;
+    background: #fff;
+}
+ 
+.cal-header-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #202124;
+    letter-spacing: -0.2px;
+}
+ 
+.cal-header-sub {
+    font-size: 12px;
+    color: #888;
+    margin-top: 1px;
+}
+ 
+.cal-nav {
+    display: flex;
+    gap: 6px;
+}
+ 
+.cal-btn {
+    background: #f1f3f4;
+    border: none;
+    border-radius: 8px;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    color: #444;
+    transition: background 0.15s;
+}
+ 
+.cal-btn:hover {
+    background: #e0e0e0;
+}
+ 
+.cal-btn-hoy {
+    width: auto;
+    padding: 0 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #1a73e8;
+    background: #e8f0fe;
+}
+ 
+.cal-btn-hoy:hover {
+    background: #d2e3fc;
+}
+ 
+/* ========================
+   GRID CALENDARIO
+======================== */
+.cal-grid {
+    display: grid;
+    grid-template-columns: 52px repeat(6, 1fr);
+    overflow-y: auto;
+    max-height: calc(100vh - 165px);
+    position: relative;
+}
+ 
+/* Columna de horas */
+.cal-time-col {
+    position: sticky;
+    left: 0;
+    background: #fff;
+    z-index: 10;
+}
+ 
+/* Fila de dias */
+.cal-days-header {
+    display: grid;
+    grid-template-columns: 52px repeat(6, 1fr);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: #fff;
+    border-bottom: 1px solid #e8e8e8;
+}
+ 
+.cal-day-label {
+    text-align: center;
+    padding: 8px 4px;
+    border-left: 1px solid #f0f0f0;
+}
+ 
+.cal-day-label .dow {
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+ 
+.cal-day-label .dom {
+    font-size: 18px;
+    font-weight: 600;
+    color: #202124;
+    line-height: 1.2;
+    margin-top: 1px;
+}
+ 
+.cal-day-label.hoy .dom {
+    background: #1a73e8;
+    color: #fff;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+ 
+.cal-day-label.hoy .dow {
+    color: #1a73e8;
+}
+ 
+/* Cuerpo con franjas horarias */
+.cal-body {
+    display: contents;
+}
+ 
+.cal-time-label {
+    height: 60px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding: 4px 8px 0 0;
+    font-size: 10px;
+    color: #aaa;
+    font-weight: 500;
+    position: relative;
+    top: -8px;
+}
+ 
+.cal-row {
+    display: contents;
+}
+ 
+.cal-cell {
+    height: 60px;
+    border-left: 1px solid #f0f0f0;
+    border-bottom: 1px solid #f5f5f5;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.12s;
+}
+ 
+.cal-cell:hover {
+    background: #f8f9ff;
+}
+ 
+/* Linea de hora actual */
+.cal-now-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: #ea4335;
+    z-index: 5;
+    pointer-events: none;
+}
+ 
+.cal-now-dot {
+    position: absolute;
+    left: -4px;
+    top: -4px;
+    width: 10px;
+    height: 10px;
+    background: #ea4335;
+    border-radius: 50%;
+}
+ 
+/* ========================
+   BLOQUES DE SESION
+======================== */
+.sesion-bloque {
+    position: absolute;
+    left: 3px;
+    right: 3px;
+    border-radius: 6px;
+    padding: 4px 7px;
+    font-size: 11px;
+    cursor: pointer;
+    overflow: hidden;
+    z-index: 4;
+    transition: filter 0.15s, transform 0.12s;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.10);
+}
+ 
+.sesion-bloque:hover {
+    filter: brightness(0.93);
+    transform: scale(1.01);
+}
+ 
+.sesion-bloque .sb-nombre {
+    font-weight: 600;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+ 
+.sesion-bloque .sb-hora {
+    font-size: 10px;
+    opacity: 0.8;
+    margin-top: 1px;
+}
+ 
+.sesion-bloque .sb-proc {
+    font-size: 10px;
+    opacity: 0.75;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+ 
+/* Paleta de colores por paciente (rotatoria) */
+.color-0 { background: #d2e3fc; color: #1558b0; border-left: 3px solid #1a73e8; }
+.color-1 { background: #fce8e6; color: #a50e0e; border-left: 3px solid #ea4335; }
+.color-2 { background: #e6f4ea; color: #137333; border-left: 3px solid #34a853; }
+.color-3 { background: #fef7e0; color: #7b5f00; border-left: 3px solid #fbbc04; }
+.color-4 { background: #f3e8fd; color: #681da8; border-left: 3px solid #9c27b0; }
+.color-5 { background: #e8f5e9; color: #1b5e20; border-left: 3px solid #4caf50; }
+ 
+/* ========================
+   TOOLTIP / POPUP SESION
+======================== */
+.sesion-popup {
+    display: none;
+    position: fixed;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    padding: 16px 18px;
+    z-index: 200;
+    min-width: 220px;
+    max-width: 280px;
+    font-size: 13px;
+    pointer-events: none;
+}
+ 
+.sesion-popup.visible {
+    display: block;
+}
+ 
+.sp-nombre {
+    font-size: 15px;
+    font-weight: 600;
+    color: #202124;
+    margin-bottom: 6px;
+}
+ 
+.sp-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+    color: #555;
+}
+ 
+.sp-label {
+    color: #aaa;
+    min-width: 72px;
+}
+ 

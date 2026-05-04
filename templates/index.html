@@ -1,49 +1,346 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Buscador</title>
-    <link rel="stylesheet" href="/static/style.css">
+<title>Agenda</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
 
-<div class="container">
+<!-- ============================
+     BARRA DE BUSQUEDA (sin cambios)
+============================= -->
+<div class="search-wrapper">
+  <div class="container">
     <input type="text" id="search" placeholder="Buscar paciente..." autocomplete="off">
     <div id="resultados"></div>
+  </div>
+</div>
+
+<!-- ============================
+     CALENDARIO SEMANAL
+============================= -->
+<div class="calendario-layout">
+  <div class="cal-card">
+
+    <!-- Cabecera -->
+    <div class="cal-header">
+      <div>
+        <div class="cal-header-title" id="cal-titulo">Semana</div>
+        <div class="cal-header-sub" id="cal-subtitulo"></div>
+      </div>
+      <div class="cal-nav">
+        <button class="cal-btn" id="btn-ant" title="Semana anterior">&#8249;</button>
+        <button class="cal-btn cal-btn-hoy" id="btn-hoy">Hoy</button>
+        <button class="cal-btn" id="btn-sig" title="Semana siguiente">&#8250;</button>
+      </div>
+    </div>
+
+    <!-- Dias de la semana (cabecera) -->
+    <div class="cal-days-header" id="cal-days-header">
+      <div></div><!-- espacio col horas -->
+      <!-- Lunes a Sábado — se generan por JS -->
+    </div>
+
+    <!-- Cuerpo: horas + celdas -->
+    <div class="cal-grid" id="cal-grid">
+      <!-- Generado por JS -->
+    </div>
+
+  </div>
+</div>
+
+<!-- Popup de sesión -->
+<div class="sesion-popup" id="sesion-popup">
+  <div class="sp-nombre" id="sp-nombre"></div>
+  <div class="sp-row"><span class="sp-label">Fecha</span><span id="sp-fecha"></span></div>
+  <div class="sp-row"><span class="sp-label">Hora</span><span id="sp-hora"></span></div>
+  <div class="sp-row"><span class="sp-label">Duración</span><span id="sp-dur"></span></div>
+  <div class="sp-row" id="sp-proc-row"><span class="sp-label">Procedimiento</span><span id="sp-proc"></span></div>
+  <div class="sp-row" id="sp-notas-row"><span class="sp-label">Notas</span><span id="sp-notas"></span></div>
 </div>
 
 <script>
+// ================================================
+// CONFIGURACION
+// ================================================
+const HORA_INICIO = 9;   // 9 AM
+const HORA_FIN    = 21;  // 9 PM
+const PX_POR_HORA = 60;
+const DIAS = ["Lun","Mar","Mié","Jue","Vie","Sáb"];
+const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+
+let semanaActual = lunesDe(new Date());
+let sesionesCache = [];
+const colorMap = {};
+let colorIdx = 0;
+
+// ================================================
+// BARRA DE BUSQUEDA (igual que antes)
+// ================================================
 const input = document.getElementById("search");
 const resultados = document.getElementById("resultados");
 
 input.addEventListener("input", async () => {
-    let query = input.value;
-
-    if (!query) {
-        resultados.innerHTML = "";
-        return;
-    }
-
-    let res = await fetch(`/buscar?q=${query}`);
-    let data = await res.json();
-
-    resultados.innerHTML = "";
-
-    data.forEach(item => {
-        let div = document.createElement("div");
-        div.className = "item";
-        div.innerText = item;
-
-        div.onclick = () => {
-            if (item.startsWith("➕")) {
-                alert("Crear paciente: " + query);
-            } else {
-                alert("Seleccionado: " + item);
-            }
-        };
-
-        resultados.appendChild(div);
-    });
+  let query = input.value;
+  if (!query) { resultados.innerHTML = ""; return; }
+  let res = await fetch(`/buscar?q=${encodeURIComponent(query)}`);
+  let data = await res.json();
+  resultados.innerHTML = "";
+  data.forEach(item => {
+    let div = document.createElement("div");
+    div.className = "item";
+    div.innerText = item;
+    div.onclick = () => {
+      if (item.startsWith("➕")) {
+        alert("Crear paciente: " + query);
+      } else {
+        alert("Seleccionado: " + item);
+      }
+      resultados.innerHTML = "";
+      input.value = "";
+    };
+    resultados.appendChild(div);
+  });
 });
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".container")) {
+    resultados.innerHTML = "";
+  }
+});
+
+// ================================================
+// UTILIDADES DE FECHA
+// ================================================
+function lunesDe(fecha) {
+  const d = new Date(fecha);
+  const dow = d.getDay();
+  const diff = dow === 0 ? -6 : 1 - dow;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0,0,0,0);
+  return d;
+}
+
+function agregarDias(fecha, n) {
+  const d = new Date(fecha);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
+function formatoFechaISO(d) {
+  return d.toISOString().split("T")[0];
+}
+
+function colorPaciente(nombre) {
+  if (!(nombre in colorMap)) {
+    colorMap[nombre] = colorIdx % 6;
+    colorIdx++;
+  }
+  return colorMap[nombre];
+}
+
+// ================================================
+// RENDER CABECERA DIAS
+// ================================================
+function renderCabecera() {
+  const hoy = new Date();
+  hoy.setHours(0,0,0,0);
+  const header = document.getElementById("cal-days-header");
+  header.innerHTML = '<div></div>'; // espacio horas
+
+  for (let i = 0; i < 6; i++) {
+    const dia = agregarDias(semanaActual, i);
+    const esHoy = dia.getTime() === hoy.getTime();
+    const div = document.createElement("div");
+    div.className = "cal-day-label" + (esHoy ? " hoy" : "");
+    div.innerHTML = `<div class="dow">${DIAS[i]}</div><div class="dom">${dia.getDate()}</div>`;
+    header.appendChild(div);
+  }
+
+  // Titulo
+  const fin = agregarDias(semanaActual, 5);
+  document.getElementById("cal-titulo").textContent =
+    `${semanaActual.getDate()} – ${fin.getDate()} de ${MESES[fin.getMonth()]} ${fin.getFullYear()}`;
+  document.getElementById("cal-subtitulo").textContent =
+    `Semana del ${MESES[semanaActual.getMonth()]}`;
+}
+
+// ================================================
+// RENDER GRILLA HORARIA
+// ================================================
+function renderGrilla() {
+  const grid = document.getElementById("cal-grid");
+  grid.innerHTML = "";
+  const totalHoras = HORA_FIN - HORA_INICIO;
+
+  for (let h = HORA_INICIO; h < HORA_FIN; h++) {
+    // Etiqueta de hora
+    const label = document.createElement("div");
+    label.className = "cal-time-label";
+    label.textContent = h < 12 ? `${h} AM` : h === 12 ? "12 PM" : `${h-12} PM`;
+    grid.appendChild(label);
+
+    // 6 celdas (Lun–Sáb)
+    for (let d = 0; d < 6; d++) {
+      const cell = document.createElement("div");
+      cell.className = "cal-cell";
+      cell.dataset.hora = h;
+      cell.dataset.dia = d;
+      grid.appendChild(cell);
+    }
+  }
+}
+
+// ================================================
+// CARGAR SESIONES Y COLOCAR BLOQUES
+// ================================================
+async function cargarSemana() {
+  const iso = formatoFechaISO(semanaActual);
+  const res = await fetch(`/calendario?fecha_inicio=${iso}`);
+  const data = await res.json();
+  sesionesCache = data.sesiones;
+  renderBloques();
+}
+
+function renderBloques() {
+  // Limpiar bloques anteriores
+  document.querySelectorAll(".sesion-bloque").forEach(b => b.remove());
+
+  sesionesCache.forEach(s => {
+    const [h, m] = s.hora_inicio.split(":").map(Number);
+    if (h < HORA_INICIO || h >= HORA_FIN) return;
+
+    // Fila de la hora dentro del grid
+    const filaHora = h - HORA_INICIO;
+    // Columna del dia (0=Lun, 5=Sáb)
+    const fechaSesion = new Date(s.fecha + "T00:00:00");
+    const dow = fechaSesion.getDay(); // 0=dom, 1=lun...6=sáb
+    const col = dow === 0 ? -1 : dow - 1; // 0=lun..5=sáb
+    if (col < 0 || col > 5) return;
+
+    // Encontrar la celda correcta
+    // El grid tiene: col 0 = etiqueta hora, col 1-6 = dias
+    // Orden en DOM: [hora_label, cel_lun, cel_mar,..., cel_sab] por cada fila
+    const cells = document.querySelectorAll(".cal-cell");
+    // Cada fila tiene 6 celdas; fila = filaHora, columna = col
+    const totalHoras = HORA_FIN - HORA_INICIO;
+    const cellIndex = filaHora * 6 + col;
+    if (cellIndex >= cells.length) return;
+    const cell = cells[cellIndex];
+
+    // Posición vertical dentro de la celda
+    const topPx = (m / 60) * PX_POR_HORA;
+    const altoPx = Math.max((s.duracion_minutos / 60) * PX_POR_HORA - 4, 20);
+
+    const bloque = document.createElement("div");
+    bloque.className = `sesion-bloque color-${colorPaciente(s.paciente)}`;
+    bloque.style.top = topPx + "px";
+    bloque.style.height = altoPx + "px";
+    bloque.innerHTML = `
+      <div class="sb-nombre">${s.paciente}</div>
+      <div class="sb-hora">${s.hora_inicio} · ${s.duracion_minutos} min</div>
+      ${s.procedimiento ? `<div class="sb-proc">${s.procedimiento}</div>` : ''}
+    `;
+
+    bloque.addEventListener("mouseenter", (e) => mostrarPopup(e, s));
+    bloque.addEventListener("mouseleave", () => ocultarPopup());
+
+    cell.appendChild(bloque);
+  });
+
+  // Línea de hora actual (solo si estamos en la semana actual)
+  renderLineaActual();
+}
+
+function renderLineaActual() {
+  document.querySelectorAll(".cal-now-line").forEach(l => l.remove());
+  const hoy = new Date();
+  const lunes = lunesDe(hoy);
+  if (formatoFechaISO(lunes) !== formatoFechaISO(semanaActual)) return;
+
+  const h = hoy.getHours();
+  const m = hoy.getMinutes();
+  if (h < HORA_INICIO || h >= HORA_FIN) return;
+
+  const col = hoy.getDay() - 1; // 0=lun..5=sáb
+  if (col < 0 || col > 5) return;
+
+  const filaHora = h - HORA_INICIO;
+  const cells = document.querySelectorAll(".cal-cell");
+  const cellIndex = filaHora * 6 + col;
+  if (cellIndex >= cells.length) return;
+  const cell = cells[cellIndex];
+
+  const topPx = (m / 60) * PX_POR_HORA;
+  const linea = document.createElement("div");
+  linea.className = "cal-now-line";
+  linea.style.top = topPx + "px";
+  linea.innerHTML = '<div class="cal-now-dot"></div>';
+  cell.appendChild(linea);
+}
+
+// ================================================
+// POPUP
+// ================================================
+function mostrarPopup(e, s) {
+  const pop = document.getElementById("sesion-popup");
+  document.getElementById("sp-nombre").textContent = s.paciente;
+  document.getElementById("sp-fecha").textContent = s.fecha;
+  document.getElementById("sp-hora").textContent = s.hora_inicio;
+  document.getElementById("sp-dur").textContent = s.duracion_minutos + " min";
+  document.getElementById("sp-proc").textContent = s.procedimiento || "—";
+  document.getElementById("sp-notas").textContent = s.notas || "—";
+
+  pop.style.left = (e.clientX + 16) + "px";
+  pop.style.top = (e.clientY - 20) + "px";
+  pop.classList.add("visible");
+}
+
+function ocultarPopup() {
+  document.getElementById("sesion-popup").classList.remove("visible");
+}
+
+// ================================================
+// NAVEGACION
+// ================================================
+document.getElementById("btn-ant").addEventListener("click", () => {
+  semanaActual = agregarDias(semanaActual, -7);
+  actualizar();
+});
+
+document.getElementById("btn-sig").addEventListener("click", () => {
+  semanaActual = agregarDias(semanaActual, 7);
+  actualizar();
+});
+
+document.getElementById("btn-hoy").addEventListener("click", () => {
+  semanaActual = lunesDe(new Date());
+  actualizar();
+});
+
+function actualizar() {
+  renderCabecera();
+  renderGrilla();
+  cargarSemana();
+}
+
+// Scroll al inicio de la jornada al cargar
+function scrollAlInicio() {
+  const grid = document.getElementById("cal-grid");
+  // Scrollear a las 9 AM (primer fila visible)
+  grid.scrollTop = 0;
+}
+
+// ================================================
+// INIT
+// ================================================
+actualizar();
+setTimeout(scrollAlInicio, 100);
+
+// Actualizar linea de hora actual cada minuto
+setInterval(renderLineaActual, 60000);
 </script>
 
 </body>
