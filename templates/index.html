@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Buscador</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="container">
+    <input type="text" id="search" placeholder="Buscar paciente..." autocomplete="off">
+    <div id="resultados"></div>
+</div>
+
+<script>
+const input = document.getElementById("search");
+const resultados = document.getElementById("resultados");
+
+input.addEventListener("input", async () => {
+    let query = input.value;
+
+    if (!query) {
+        resultados.innerHTML = "";
+        return;
+    }
+
+    let res = await fetch(`/buscar?q=${query}`);
+    let data = await res.json();
+
+    resultados.innerHTML = "";
+
+    data.forEach(item => {
+        let div = document.createElement("div");
+        div.className = "item";
+        div.innerText = item;
+
+        div.onclick = () => {
+            if (item.startsWith("➕")) {
+                alert("Crear paciente: " + query);
+            } else {
+                alert("Seleccionado: " + item);
+            }
+        };
+
+        resultados.appendChild(div);
+    });
+});
+</script>
+
+</body>
+</html>
