@@ -133,3 +133,46 @@ def home():
 @app.get("/buscar")
 def buscar_api(q: str = ""):
     return buscar(q)
+
+
+################agregado en el commit owo###############
+
+@app.get("/paciente")
+def obtener_paciente(nombre: str):
+    cursor.execute("SELECT * FROM productos WHERE nombre = ?", (nombre,))
+    row = cursor.fetchone()
+
+    if not row:
+        return {"error": "No encontrado"}
+
+    keys = ["nombre","fecha","procedimiento","nro_sesiones","proxima_sesion",
+            "nro_whatsapp","tiene_diabetes","tiene_hipertension","antecedentes","edad"]
+
+    return dict(zip(keys, row))
+
+
+@app.post("/crear")
+def crear_paciente(data: dict):
+    fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    cursor.execute("""
+    INSERT INTO productos VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        data["nombre"],
+        fecha,
+        data["procedimiento"],
+        int(data["nro_sesiones"]),
+        data["proxima_sesion"],
+        data["nro_whatsapp"],
+        data["tiene_diabetes"],
+        data["tiene_hipertension"],
+        data["antecedentes"],
+        int(data["edad"])
+    ))
+
+    conexion.commit()
+
+    # actualizar trie en caliente
+    trie.insertar(data["nombre"])
+
+    return {"ok": True}

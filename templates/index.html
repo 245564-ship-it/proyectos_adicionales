@@ -11,10 +11,25 @@
     <div id="resultados"></div>
 </div>
 
+<!-- 🔥 MODAL -->
+<div id="modal" class="modal hidden">
+    <div class="modal-content" id="modalContent"></div>
+</div>
+
 <script>
 const input = document.getElementById("search");
 const resultados = document.getElementById("resultados");
+const modal = document.getElementById("modal");
+const modalContent = document.getElementById("modalContent");
 
+// cerrar modal
+modal.onclick = (e) => {
+    if (e.target === modal) modal.classList.add("hidden");
+};
+
+// =====================
+// BUSCAR
+// =====================
 input.addEventListener("input", async () => {
     let query = input.value;
 
@@ -33,17 +48,86 @@ input.addEventListener("input", async () => {
         div.className = "item";
         div.innerText = item;
 
-        div.onclick = () => {
-            if (item.startsWith("➕")) {
-                alert("Crear paciente: " + query);
-            } else {
-                alert("Seleccionado: " + item);
-            }
-        };
+        div.onclick = () => manejarClick(item, query);
 
         resultados.appendChild(div);
     });
 });
+
+// =====================
+// CLICK EN RESULTADO
+// =====================
+async function manejarClick(item, query) {
+    modal.classList.remove("hidden");
+
+    // 👉 CREAR
+    if (item.startsWith("➕")) {
+        modalContent.innerHTML = `
+        <h2>Crear Paciente</h2>
+
+        <form id="formCrear">
+            <input placeholder="Nombre" value="${query}" required>
+            <input placeholder="Procedimiento" required>
+            <input placeholder="Nro Sesiones" required>
+            <input placeholder="Proxima Sesion">
+            <input placeholder="WhatsApp">
+            <input placeholder="Diabetes (si/no)">
+            <input placeholder="Hipertension (si/no)">
+            <input placeholder="Antecedentes">
+            <input placeholder="Edad" required>
+
+            <button type="submit">Guardar</button>
+        </form>
+        `;
+
+        document.getElementById("formCrear").onsubmit = async (e) => {
+            e.preventDefault();
+
+            let inputs = e.target.querySelectorAll("input");
+
+            let data = {
+                nombre: inputs[0].value,
+                procedimiento: inputs[1].value,
+                nro_sesiones: inputs[2].value,
+                proxima_sesion: inputs[3].value,
+                nro_whatsapp: inputs[4].value,
+                tiene_diabetes: inputs[5].value,
+                tiene_hipertension: inputs[6].value,
+                antecedentes: inputs[7].value,
+                edad: inputs[8].value
+            };
+
+            await fetch("/crear", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(data)
+            });
+
+            modal.classList.add("hidden");
+            alert("Paciente creado");
+        };
+
+    } 
+    // 👉 VER PACIENTE
+    else {
+        let res = await fetch(`/paciente?nombre=${item}`);
+        let data = await res.json();
+
+        modalContent.innerHTML = `
+        <h2>${data.nombre}</h2>
+
+        <p><b>Fecha:</b> ${data.fecha}</p>
+        <p><b>Procedimiento:</b> ${data.procedimiento}</p>
+        <p><b>Sesiones:</b> ${data.nro_sesiones}</p>
+        <p><b>Proxima:</b> ${data.proxima_sesion}</p>
+        <p><b>WhatsApp:</b> ${data.nro_whatsapp}</p>
+        <p><b>Diabetes:</b> ${data.tiene_diabetes}</p>
+        <p><b>Hipertension:</b> ${data.tiene_hipertension}</p>
+        <p><b>Antecedentes:</b> ${data.antecedentes}</p>
+        <p><b>Edad:</b> ${data.edad}</p>
+        `;
+    }
+}
 </script>
 
 </body>
