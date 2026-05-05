@@ -9,13 +9,14 @@
 <body>
 
 <!-- ============================
-     BARRA DE BUSQUEDA (sin cambios)
+     BARRA DE BUSQUEDA
 ============================= -->
 <div class="search-wrapper">
   <div class="container">
     <input type="text" id="search" placeholder="Buscar paciente..." autocomplete="off">
     <div id="resultados"></div>
   </div>
+  <button class="btn-registros" id="btnRegistros" title="Ver registros">📋 Registros</button>
 </div>
 
 <!-- ============================
@@ -24,7 +25,6 @@
 <div class="calendario-layout">
   <div class="cal-card">
 
-    <!-- Cabecera -->
     <div class="cal-header">
       <div>
         <div class="cal-header-title" id="cal-titulo">Semana</div>
@@ -37,16 +37,11 @@
       </div>
     </div>
 
-    <!-- Dias de la semana (cabecera) -->
     <div class="cal-days-header" id="cal-days-header">
-      <div></div><!-- espacio col horas -->
-      <!-- Lunes a Sábado — se generan por JS -->
+      <div></div>
     </div>
 
-    <!-- Cuerpo: horas + celdas -->
-    <div class="cal-grid" id="cal-grid">
-      <!-- Generado por JS -->
-    </div>
+    <div class="cal-grid" id="cal-grid"></div>
 
   </div>
 </div>
@@ -61,6 +56,26 @@
   </div>
 </div>
 
+<!-- ============================
+     MODAL ASISTENCIA
+============================= -->
+<div id="modalAsistencia" class="modal hidden">
+  <div class="modal-content modal-asistencia-content">
+    <span class="closeBtn" id="closeBtnAsistencia">✖</span>
+    <div id="asistenciaBody"></div>
+  </div>
+</div>
+
+<!-- ============================
+     MODAL REGISTROS
+============================= -->
+<div id="modalRegistros" class="modal hidden">
+  <div class="modal-content modal-registros-content">
+    <span class="closeBtn" id="closeBtnRegistros">✖</span>
+    <div id="registrosBody"></div>
+  </div>
+</div>
+
 <!-- Popup de sesión -->
 <div class="sesion-popup" id="sesion-popup">
   <div class="sp-nombre" id="sp-nombre"></div>
@@ -69,14 +84,15 @@
   <div class="sp-row"><span class="sp-label">Duración</span><span id="sp-dur"></span></div>
   <div class="sp-row" id="sp-proc-row"><span class="sp-label">Procedimiento</span><span id="sp-proc"></span></div>
   <div class="sp-row" id="sp-notas-row"><span class="sp-label">Notas</span><span id="sp-notas"></span></div>
+  <div class="sp-row"><span class="sp-label">Estado</span><span id="sp-estado"></span></div>
 </div>
 
 <script>
 // ================================================
 // CONFIGURACION
 // ================================================
-const HORA_INICIO = 9;   // 9 AM
-const HORA_FIN    = 21;  // 9 PM
+const HORA_INICIO = 9;
+const HORA_FIN    = 21;
 const PX_POR_HORA = 60;
 const DIAS = ["Lun","Mar","Mié","Jue","Vie","Sáb"];
 const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
@@ -87,11 +103,8 @@ const colorMap = {};
 let colorIdx = 0;
 
 // ================================================
-// BARRA DE BUSQUEDA (igual que antes)
+// MODAL PRINCIPAL
 // ================================================
-const input = document.getElementById("search");
-const resultados = document.getElementById("resultados");
-
 const modal = document.getElementById("modal");
 const modalBody = document.getElementById("modalBody");
 const closeBtn = document.getElementById("closeBtn");
@@ -102,10 +115,169 @@ function cerrarModal() {
 }
 
 closeBtn.addEventListener("click", cerrarModal);
+modal.addEventListener("click", (e) => { if (e.target === modal) cerrarModal(); });
 
-modal.addEventListener("click", (e) => {
-  if (e.target === modal) cerrarModal();
-});
+// ================================================
+// MODAL ASISTENCIA
+// ================================================
+const modalAsistencia = document.getElementById("modalAsistencia");
+const asistenciaBody = document.getElementById("asistenciaBody");
+const closeBtnAsistencia = document.getElementById("closeBtnAsistencia");
+let asistenciaCallback = null;
+
+function cerrarModalAsistencia() {
+  modalAsistencia.classList.add("hidden");
+  asistenciaBody.innerHTML = "";
+  asistenciaCallback = null;
+}
+
+closeBtnAsistencia.addEventListener("click", cerrarModalAsistencia);
+modalAsistencia.addEventListener("click", (e) => { if (e.target === modalAsistencia) cerrarModalAsistencia(); });
+
+function abrirModalAsistencia(sesion, onDone) {
+  asistenciaCallback = onDone;
+  const estadoLabel = sesion.asistencia === 'si'
+    ? '<span style="color:#137333;font-weight:600;">✔ Asistió</span>'
+    : sesion.asistencia === 'no'
+      ? '<span style="color:#a50e0e;font-weight:600;">✘ No asistió</span>'
+      : '<span style="color:#888;">Sin registrar</span>';
+
+  asistenciaBody.innerHTML = `
+    <div class="asistencia-header">
+      <div class="asistencia-icon">📋</div>
+      <h2>Registrar asistencia</h2>
+      <p class="asistencia-sub">Sesión de <b>${sesion.paciente || sesion.nombre_paciente}</b></p>
+    </div>
+    <div class="asistencia-info">
+      <span>📅 ${sesion.fecha || sesion.fecha_sesion}</span>
+      <span>🕐 ${sesion.hora_inicio}</span>
+      <span>⏱ ${sesion.duracion_minutos} min</span>
+      ${sesion.procedimiento ? `<span>💆 ${sesion.procedimiento}</span>` : ''}
+    </div>
+    ${sesion.asistencia ? `<div class="asistencia-estado-actual">Estado actual: ${estadoLabel}</div>` : ''}
+    <div class="asistencia-botones">
+      <button class="btn-asistio" id="btnAsistio">
+        <span class="btn-icon">✔</span>
+        <span>Sí asistió</span>
+      </button>
+      <button class="btn-no-asistio" id="btnNoAsistio">
+        <span class="btn-icon">✘</span>
+        <span>No asistió</span>
+      </button>
+    </div>
+  `;
+
+  modalAsistencia.classList.remove("hidden");
+
+  document.getElementById("btnAsistio").onclick = async () => {
+    await registrarAsistencia(sesion.id, "si");
+    cerrarModalAsistencia();
+    if (asistenciaCallback) asistenciaCallback();
+  };
+
+  document.getElementById("btnNoAsistio").onclick = async () => {
+    await registrarAsistencia(sesion.id, "no");
+    cerrarModalAsistencia();
+    if (asistenciaCallback) asistenciaCallback();
+  };
+}
+
+async function registrarAsistencia(sesionId, asistencia) {
+  const res = await fetch(`/sesion/marcar_asistencia/${sesionId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ asistencia })
+  });
+  const data = await res.json();
+
+  if (data.procedimiento_completado) {
+    setTimeout(() => {
+      mostrarNotificacion("🎉 ¡Procedimiento completado! El paciente ha cumplido todas sus sesiones.", "success");
+    }, 300);
+  }
+
+  return data;
+}
+
+// ================================================
+// MODAL REGISTROS
+// ================================================
+const modalRegistros = document.getElementById("modalRegistros");
+const registrosBody = document.getElementById("registrosBody");
+const closeBtnRegistros = document.getElementById("closeBtnRegistros");
+
+function cerrarModalRegistros() {
+  modalRegistros.classList.add("hidden");
+  registrosBody.innerHTML = "";
+}
+
+closeBtnRegistros.addEventListener("click", cerrarModalRegistros);
+modalRegistros.addEventListener("click", (e) => { if (e.target === modalRegistros) cerrarModalRegistros(); });
+
+document.getElementById("btnRegistros").addEventListener("click", abrirModalRegistros);
+
+async function abrirModalRegistros() {
+  modalRegistros.classList.remove("hidden");
+  registrosBody.innerHTML = `<div class="loading-registros">⏳ Cargando registros...</div>`;
+
+  const res = await fetch("/registros");
+  const data = await res.json();
+  const registros = data.registros || [];
+
+  if (!registros.length) {
+    registrosBody.innerHTML = `
+      <h2>📋 Registros de sesiones</h2>
+      <p style="color:#888;margin-top:16px;">No hay registros aún.</p>
+    `;
+    return;
+  }
+
+  // Agrupar por fecha de registro (día)
+  const grupos = {};
+  registros.forEach(r => {
+    const dia = r.fecha_registro ? r.fecha_registro.split(" ")[0] : "Sin fecha";
+    if (!grupos[dia]) grupos[dia] = [];
+    grupos[dia].push(r);
+  });
+
+  let html = `<h2>📋 Registros de sesiones</h2>`;
+
+  Object.entries(grupos).forEach(([dia, items]) => {
+    html += `<div class="reg-grupo-fecha">${formatearFechaLarga(dia)}</div>`;
+    items.forEach(r => {
+      const asistenciaClass = r.asistencia === 'si' ? 'reg-asistio' : r.asistencia === 'no' ? 'reg-no-asistio' : 'reg-sin-registro';
+      const asistenciaLabel = r.asistencia === 'si' ? '✔ Asistió' : r.asistencia === 'no' ? '✘ No asistió' : '— Sin registrar';
+      const progreso = r.nro_sesiones_programadas > 0
+        ? `${r.sesiones_asistidas}/${r.nro_sesiones_programadas}`
+        : `${r.sesiones_asistidas} asistidas`;
+      const horaReg = r.fecha_registro ? r.fecha_registro.split(" ")[1].substring(0,5) : "";
+
+      html += `
+        <div class="reg-item ${asistenciaClass}">
+          <div class="reg-item-header">
+            <span class="reg-paciente">${r.paciente}</span>
+            <span class="reg-hora-reg">${horaReg}</span>
+          </div>
+          <div class="reg-item-info">
+            <span>📅 ${r.fecha_sesion} · 🕐 ${r.hora_inicio}</span>
+            ${r.procedimiento ? `<span>💆 ${r.procedimiento}</span>` : ''}
+            <span class="reg-asistencia-badge">${asistenciaLabel}</span>
+            <span class="reg-progreso">Progreso: ${progreso}</span>
+          </div>
+          ${r.notas ? `<div class="reg-notas">📝 ${r.notas}</div>` : ''}
+        </div>
+      `;
+    });
+  });
+
+  registrosBody.innerHTML = html;
+}
+
+// ================================================
+// BARRA DE BUSQUEDA
+// ================================================
+const input = document.getElementById("search");
+const resultados = document.getElementById("resultados");
 
 input.addEventListener("input", async () => {
   let query = input.value;
@@ -118,51 +290,49 @@ input.addEventListener("input", async () => {
     div.className = "item";
     div.innerText = item;
     div.onclick = () => {
-        abrirModal(item, query);
-        resultados.innerHTML = "";
-        input.value = "";
+      abrirModal(item, query);
+      resultados.innerHTML = "";
+      input.value = "";
     };
     resultados.appendChild(div);
   });
 });
 
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".container")) {
+    resultados.innerHTML = "";
+  }
+});
+
+// ================================================
+// MODAL PACIENTE / CREAR
+// ================================================
 async function abrirModal(item, query) {
   modal.classList.remove("hidden");
 
   if (item.startsWith("➕")) {
     modalBody.innerHTML = `
       <h2>Crear Paciente</h2>
-
       <form id="formCrear" class="form-grid">
         <div class="form-span-2">
           <input name="nombre" placeholder="Nombre" value="${query}" required>
         </div>
-
         <input name="procedimiento" placeholder="Procedimiento" required>
-        <input name="nro_sesiones" type="number" min="0" placeholder="Nro sesiones programadas para el paciente" required>
-
+        <input name="nro_sesiones" type="number" min="0" placeholder="Nro sesiones programadas" required>
         <input name="nro_whatsapp" placeholder="WhatsApp">
         <input name="edad" type="number" min="0" placeholder="Edad" required>
-
         <input name="tiene_diabetes" placeholder="Diabetes (si/no)">
         <input name="tiene_hipertension" placeholder="Hipertensión (si/no)">
-
         <div class="form-span-2">
           <input name="antecedentes" placeholder="Antecedentes">
         </div>
-
-        <div class="form-span-2">
-          <h3>Proxima sesión (opcional)</h3>
-        </div>
-
+        <div class="form-span-2"><h3>Primera sesión (opcional)</h3></div>
         <input name="fecha_sesion" type="date">
         <input name="hora_inicio" type="time">
         <input name="duracion_minutos" type="number" min="15" value="60" placeholder="Duración min">
-
         <div class="form-span-2">
           <input name="notas" placeholder="Notas">
         </div>
-
         <div class="form-actions form-span-2">
           <button type="button" id="btnCancelar">Cancelar</button>
           <button type="submit">Guardar</button>
@@ -175,7 +345,6 @@ async function abrirModal(item, query) {
     document.getElementById("formCrear").addEventListener("submit", async (e) => {
       e.preventDefault();
       const f = e.currentTarget;
-
       const data = {
         nombre: f.nombre.value,
         procedimiento: f.procedimiento.value,
@@ -210,7 +379,11 @@ async function abrirModal(item, query) {
     return;
   }
 
-  const res = await fetch(`/paciente?nombre=${encodeURIComponent(item)}`);
+  await cargarModalPaciente(item);
+}
+
+async function cargarModalPaciente(nombre) {
+  const res = await fetch(`/paciente?nombre=${encodeURIComponent(nombre)}`);
   const data = await res.json();
 
   if (data.error) {
@@ -220,46 +393,155 @@ async function abrirModal(item, query) {
 
   const p = data.paciente;
   const sesiones = data.sesiones || [];
+  const asistidas = p.sesiones_asistidas || 0;
+  const programadas = p.nro_sesiones || 0;
+  const completado = p.estado_procedimiento === "completado";
+
+  const pct = programadas > 0 ? Math.min(100, Math.round((asistidas / programadas) * 100)) : 0;
+  const estadoBadge = completado
+    ? `<span class="badge-completado">✔ Procedimiento completado</span>`
+    : `<span class="badge-en-progreso">⏳ En progreso</span>`;
 
   modalBody.innerHTML = `
-    <h2>${p.nombre}</h2>
-
-    <div class="datos-paciente">
-      <p><b>Fecha:</b> ${p.fecha}</p>
-      <p><b>Procedimiento:</b> ${p.procedimiento}</p>
-      <p><b>Nro sesiones:</b> ${p.nro_sesiones}</p>
-      <p><b>WhatsApp:</b> ${p.nro_whatsapp}</p>
-      <p><b>Diabetes:</b> ${p.tiene_diabetes}</p>
-      <p><b>Hipertensión:</b> ${p.tiene_hipertension}</p>
-      <p><b>Antecedentes:</b> ${p.antecedentes}</p>
-      <p><b>Edad:</b> ${p.edad}</p>
+    <div class="paciente-header">
+      <h2>${p.nombre}</h2>
+      ${estadoBadge}
     </div>
 
-    <h3>Sesiones</h3>
-    ${
-      sesiones.length
-        ? sesiones.map(s => `
-            <div class="sesion-item">
-              <p><b>Fecha:</b> ${s.fecha_sesion}</p>
-              <p><b>Hora:</b> ${s.hora_inicio}</p>
-              <p><b>Duración:</b> ${s.duracion_minutos} min</p>
-              <p><b>Procedimiento:</b> ${s.procedimiento || "—"}</p>
-              <p><b>Notas:</b> ${s.notas || "—"}</p>
-            </div>
-          `).join("")
-        : "<p>No hay sesiones registradas.</p>"
-    }
+    <div class="contador-sesiones">
+      <div class="contador-info">
+        <span class="contador-num">${asistidas}</span>
+        <span class="contador-de">/ ${programadas}</span>
+        <span class="contador-label">sesiones asistidas</span>
+      </div>
+      <div class="barra-progreso-wrap">
+        <div class="barra-progreso" style="width:${pct}%"></div>
+      </div>
+    </div>
+
+    <div class="datos-paciente">
+      <p><b>Registro:</b> ${p.fecha}</p>
+      <p><b>Procedimiento:</b> ${p.procedimiento}</p>
+      <p><b>WhatsApp:</b> ${p.nro_whatsapp || "—"}</p>
+      <p><b>Edad:</b> ${p.edad}</p>
+      <p><b>Diabetes:</b> ${p.tiene_diabetes || "—"}</p>
+      <p><b>Hipertensión:</b> ${p.tiene_hipertension || "—"}</p>
+      <p class="form-span-2"><b>Antecedentes:</b> ${p.antecedentes || "—"}</p>
+    </div>
+
+    <div class="seccion-sesiones-header">
+      <h3>Sesiones</h3>
+    </div>
+
+    <div id="listaSesiones">
+      ${renderSesionesHTML(sesiones, nombre)}
+    </div>
+
+    <div class="seccion-nueva-sesion">
+      <h3>➕ Programar próxima sesión</h3>
+      <div class="form-grid" id="formNuevaSesion">
+        <input id="ns_fecha" type="date" placeholder="Fecha">
+        <input id="ns_hora" type="time" placeholder="Hora">
+        <input id="ns_duracion" type="number" min="15" value="60" placeholder="Duración min">
+        <input id="ns_procedimiento" placeholder="Procedimiento">
+        <div class="form-span-2">
+          <input id="ns_notas" placeholder="Notas (opcional)">
+        </div>
+        <div class="form-actions form-span-2">
+          <button type="button" id="btnGuardarSesion">Guardar sesión</button>
+        </div>
+      </div>
+    </div>
   `;
+
+  // Botones de asistencia en sesiones listadas
+  document.querySelectorAll(".btn-marcar-asistencia").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const sesionId = parseInt(btn.dataset.sesionId);
+      const sesion = sesiones.find(s => s.id === sesionId);
+      if (!sesion) return;
+      sesion.paciente = nombre;
+      abrirModalAsistencia(sesion, async () => {
+        await cargarModalPaciente(nombre);
+        await actualizar();
+      });
+    });
+  });
+
+  // Guardar nueva sesión
+  document.getElementById("btnGuardarSesion").addEventListener("click", async () => {
+    const fecha = document.getElementById("ns_fecha").value;
+    const hora = document.getElementById("ns_hora").value;
+    const duracion = document.getElementById("ns_duracion").value;
+    const proc = document.getElementById("ns_procedimiento").value;
+    const notas = document.getElementById("ns_notas").value;
+
+    if (!fecha || !hora) {
+      alert("Fecha y hora son obligatorias.");
+      return;
+    }
+
+    await fetch("/sesion/nueva", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nombre_paciente: nombre,
+        fecha_sesion: fecha,
+        hora_inicio: hora,
+        duracion_minutos: parseInt(duracion) || 60,
+        procedimiento: proc,
+        notas: notas
+      })
+    });
+
+    await cargarModalPaciente(nombre);
+    await actualizar();
+  });
 }
 
-document.addEventListener("click", (e) => {
-  if (!e.target.closest(".container")) {
-    resultados.innerHTML = "";
-  }
-});
+function renderSesionesHTML(sesiones, nombrePaciente) {
+  if (!sesiones.length) return `<p style="color:#888;margin:12px 0;">No hay sesiones registradas.</p>`;
+
+  return sesiones.map(s => {
+    let claseAsistencia = "";
+    let badgeAsistencia = "";
+    let btnLabel = "Registrar asistencia";
+
+    if (s.asistencia === "si") {
+      claseAsistencia = "sesion-asistio";
+      badgeAsistencia = `<span class="badge-asistio">✔ Asistió</span>`;
+      btnLabel = "Cambiar registro";
+    } else if (s.asistencia === "no") {
+      claseAsistencia = "sesion-no-asistio";
+      badgeAsistencia = `<span class="badge-no-asistio">✘ No asistió</span>`;
+      btnLabel = "Cambiar registro";
+    }
+
+    const fechaReg = s.fecha_registro
+      ? `<span class="reg-fecha-mini">Registrado: ${s.fecha_registro}</span>`
+      : "";
+
+    return `
+      <div class="sesion-item ${claseAsistencia}">
+        <div class="sesion-item-header">
+          <div>
+            <span class="sesion-fecha-hora">📅 ${s.fecha_sesion} · 🕐 ${s.hora_inicio} · ⏱ ${s.duracion_minutos} min</span>
+            ${s.procedimiento ? `<span class="sesion-proc">💆 ${s.procedimiento}</span>` : ""}
+            ${s.notas ? `<span class="sesion-notas">📝 ${s.notas}</span>` : ""}
+            ${fechaReg}
+          </div>
+          <div class="sesion-item-acciones">
+            ${badgeAsistencia}
+            <button class="btn-marcar-asistencia" data-sesion-id="${s.id}">${btnLabel}</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
 
 // ================================================
-// UTILIDADES DE FECHA
+// UTILIDADES
 // ================================================
 function lunesDe(fecha) {
   const d = new Date(fecha);
@@ -288,6 +570,24 @@ function colorPaciente(nombre) {
   return colorMap[nombre];
 }
 
+function formatearFechaLarga(iso) {
+  if (!iso || iso === "Sin fecha") return "Sin fecha";
+  const [y, m, d] = iso.split("-");
+  return `${parseInt(d)} de ${MESES[parseInt(m)-1]} de ${y}`;
+}
+
+function mostrarNotificacion(msg, tipo) {
+  const n = document.createElement("div");
+  n.className = `notificacion notificacion-${tipo}`;
+  n.textContent = msg;
+  document.body.appendChild(n);
+  setTimeout(() => n.classList.add("visible"), 50);
+  setTimeout(() => {
+    n.classList.remove("visible");
+    setTimeout(() => n.remove(), 400);
+  }, 4000);
+}
+
 // ================================================
 // RENDER CABECERA DIAS
 // ================================================
@@ -295,7 +595,7 @@ function renderCabecera() {
   const hoy = new Date();
   hoy.setHours(0,0,0,0);
   const header = document.getElementById("cal-days-header");
-  header.innerHTML = '<div></div>'; // espacio horas
+  header.innerHTML = '<div></div>';
 
   for (let i = 0; i < 6; i++) {
     const dia = agregarDias(semanaActual, i);
@@ -306,7 +606,6 @@ function renderCabecera() {
     header.appendChild(div);
   }
 
-  // Titulo
   const fin = agregarDias(semanaActual, 5);
   document.getElementById("cal-titulo").textContent =
     `${semanaActual.getDate()} – ${fin.getDate()} de ${MESES[fin.getMonth()]} ${fin.getFullYear()}`;
@@ -320,16 +619,13 @@ function renderCabecera() {
 function renderGrilla() {
   const grid = document.getElementById("cal-grid");
   grid.innerHTML = "";
-  const totalHoras = HORA_FIN - HORA_INICIO;
 
   for (let h = HORA_INICIO; h < HORA_FIN; h++) {
-    // Etiqueta de hora
     const label = document.createElement("div");
     label.className = "cal-time-label";
     label.textContent = h < 12 ? `${h} AM` : h === 12 ? "12 PM" : `${h-12} PM`;
     grid.appendChild(label);
 
-    // 6 celdas (Lun–Sáb)
     for (let d = 0; d < 6; d++) {
       const cell = document.createElement("div");
       cell.className = "cal-cell";
@@ -352,52 +648,58 @@ async function cargarSemana() {
 }
 
 function renderBloques() {
-  // Limpiar bloques anteriores
   document.querySelectorAll(".sesion-bloque").forEach(b => b.remove());
 
   sesionesCache.forEach(s => {
     const [h, m] = s.hora_inicio.split(":").map(Number);
     if (h < HORA_INICIO || h >= HORA_FIN) return;
 
-    // Fila de la hora dentro del grid
     const filaHora = h - HORA_INICIO;
-    // Columna del dia (0=Lun, 5=Sáb)
     const fechaSesion = new Date(s.fecha + "T00:00:00");
-    const dow = fechaSesion.getDay(); // 0=dom, 1=lun...6=sáb
-    const col = dow === 0 ? -1 : dow - 1; // 0=lun..5=sáb
+    const dow = fechaSesion.getDay();
+    const col = dow === 0 ? -1 : dow - 1;
     if (col < 0 || col > 5) return;
 
-    // Encontrar la celda correcta
-    // El grid tiene: col 0 = etiqueta hora, col 1-6 = dias
-    // Orden en DOM: [hora_label, cel_lun, cel_mar,..., cel_sab] por cada fila
     const cells = document.querySelectorAll(".cal-cell");
-    // Cada fila tiene 6 celdas; fila = filaHora, columna = col
-    const totalHoras = HORA_FIN - HORA_INICIO;
     const cellIndex = filaHora * 6 + col;
     if (cellIndex >= cells.length) return;
     const cell = cells[cellIndex];
 
-    // Posición vertical dentro de la celda
     const topPx = (m / 60) * PX_POR_HORA;
     const altoPx = Math.max((s.duracion_minutos / 60) * PX_POR_HORA - 4, 20);
 
     const bloque = document.createElement("div");
-    bloque.className = `sesion-bloque color-${colorPaciente(s.paciente)}`;
+
+    // Color según asistencia
+    let claseColor = `color-${colorPaciente(s.paciente)}`;
+    if (s.asistencia === "si") claseColor = "color-asistio";
+    else if (s.asistencia === "no") claseColor = "color-no-asistio";
+
+    bloque.className = `sesion-bloque ${claseColor}`;
     bloque.style.top = topPx + "px";
     bloque.style.height = altoPx + "px";
     bloque.innerHTML = `
       <div class="sb-nombre">${s.paciente}</div>
       <div class="sb-hora">${s.hora_inicio} · ${s.duracion_minutos} min</div>
       ${s.procedimiento ? `<div class="sb-proc">${s.procedimiento}</div>` : ''}
+      ${s.asistencia === 'si' ? '<div class="sb-asistencia sb-asistio">✔</div>' : ''}
+      ${s.asistencia === 'no' ? '<div class="sb-asistencia sb-no-asistio">✘</div>' : ''}
     `;
 
     bloque.addEventListener("mouseenter", (e) => mostrarPopup(e, s));
     bloque.addEventListener("mouseleave", () => ocultarPopup());
 
+    // Click en bloque del calendario → abrir modal asistencia
+    bloque.addEventListener("click", () => {
+      ocultarPopup();
+      abrirModalAsistencia(s, async () => {
+        await actualizar();
+      });
+    });
+
     cell.appendChild(bloque);
   });
 
-  // Línea de hora actual (solo si estamos en la semana actual)
   renderLineaActual();
 }
 
@@ -411,7 +713,7 @@ function renderLineaActual() {
   const m = hoy.getMinutes();
   if (h < HORA_INICIO || h >= HORA_FIN) return;
 
-  const col = hoy.getDay() - 1; // 0=lun..5=sáb
+  const col = hoy.getDay() - 1;
   if (col < 0 || col > 5) return;
 
   const filaHora = h - HORA_INICIO;
@@ -439,6 +741,10 @@ function mostrarPopup(e, s) {
   document.getElementById("sp-dur").textContent = s.duracion_minutos + " min";
   document.getElementById("sp-proc").textContent = s.procedimiento || "—";
   document.getElementById("sp-notas").textContent = s.notas || "—";
+  const estadoEl = document.getElementById("sp-estado");
+  if (s.asistencia === "si") estadoEl.textContent = "✔ Asistió";
+  else if (s.asistencia === "no") estadoEl.textContent = "✘ No asistió";
+  else estadoEl.textContent = "Sin registrar";
 
   pop.style.left = (e.clientX + 16) + "px";
   pop.style.top = (e.clientY - 20) + "px";
@@ -473,10 +779,8 @@ function actualizar() {
   cargarSemana();
 }
 
-// Scroll al inicio de la jornada al cargar
 function scrollAlInicio() {
   const grid = document.getElementById("cal-grid");
-  // Scrollear a las 9 AM (primer fila visible)
   grid.scrollTop = 0;
 }
 
@@ -485,8 +789,6 @@ function scrollAlInicio() {
 // ================================================
 actualizar();
 setTimeout(scrollAlInicio, 100);
-
-// Actualizar linea de hora actual cada minuto
 setInterval(renderLineaActual, 60000);
 </script>
 

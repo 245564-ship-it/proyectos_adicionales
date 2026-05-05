@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import sqlite3
@@ -8,9 +8,6 @@ import math
  
 app = FastAPI()
  
-# ==============================
-# STATIC FILES (CSS)
-# ==============================
 app.mount("/static", StaticFiles(directory="static"), name="static")
  
 # ==============================
@@ -32,9 +29,7 @@ CREATE TABLE IF NOT EXISTS productos (
     edad INTEGER
 )
 """)
- 
-# Cola de sesiones: cada fila es una sesion pendiente de un paciente
-# estado: 'pendiente' | 'completada' | 'cancelada'
+
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS sesiones (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,10 +40,22 @@ CREATE TABLE IF NOT EXISTS sesiones (
     procedimiento TEXT,
     notas TEXT,
     estado TEXT DEFAULT 'pendiente',
+    asistencia TEXT DEFAULT NULL,
+    fecha_registro TEXT DEFAULT NULL,
     FOREIGN KEY (nombre_paciente) REFERENCES productos(nombre)
 )
 """)
- 
+
+# Migrar columnas si no existen (para bases de datos existentes)
+try:
+    cursor.execute("ALTER TABLE sesiones ADD COLUMN asistencia TEXT DEFAULT NULL")
+except:
+    pass
+try:
+    cursor.execute("ALTER TABLE sesiones ADD COLUMN fecha_registro TEXT DEFAULT NULL")
+except:
+    pass
+
 conexion.commit()
  
 # ==============================
@@ -60,7 +67,6 @@ informacion = {
     "julian": (),
 }
  
-# Insertar datos de ejemplo si la tabla esta vacia
 cursor.execute("SELECT COUNT(*) FROM sesiones")
 if cursor.fetchone()[0] == 0:
     sesiones_ejemplo = [
@@ -185,8 +191,23 @@ def obtener_paciente(nombre: str):
     ]
     paciente = dict(zip(keys, row))
 
+    # Contar sesiones asistidas (completadas con asistencia=si)
     cursor.execute("""
-        SELECT fecha_sesion, hora_inicio, duracion_minutos, procedimiento, notas, estado
+        SELECT COUNT(*) FROM sesiones
+        WHERE nombre_paciente = ? AND asistencia = 'si'
+    """, (nombre,))
+    sesiones_asistidas = cursor.fetchone()[0]
+    paciente["sesiones_asistidas"] = sesiones_asistidas
+
+    # Determinar estado del procedimiento
+    nro_programadas = paciente.get("nro_sesiones", 0) or 0
+    if nro_programadas > 0 and sesiones_asistidas >= nro_programadas:
+        paciente["estado_procedimiento"] = "completado"
+    else:
+        paciente["estado_procedimiento"] = "en_progreso"
+
+    cursor.execute("""
+        SELECT id, fecha_sesion, hora_inicio, duracion_minutos, procedimiento, notas, estado, asistencia, fecha_registro
         FROM sesiones
         WHERE nombre_paciente = ?
         ORDER BY fecha_sesion, hora_inicio
@@ -196,12 +217,15 @@ def obtener_paciente(nombre: str):
     sesiones = []
     for f in filas:
         sesiones.append({
-            "fecha_sesion": f[0],
-            "hora_inicio": f[1],
-            "duracion_minutos": f[2],
-            "procedimiento": f[3] or "",
-            "notas": f[4] or "",
-            "estado": f[5]
+            "id": f[0],
+            "fecha_sesion": f[1],
+            "hora_inicio": f[2],
+            "duracion_minutos": f[3],
+            "procedimiento": f[4] or "",
+            "notas": f[5] or "",
+            "estado": f[6],
+            "asistencia": f[7],
+            "fecha_registro": f[8] or ""
         })
 
     return {
@@ -241,26 +265,26 @@ def crear_paciente(data: dict):
 
     fecha_sesion = data.get("fecha_sesion", "").strip()
     hora_inicio = data.get("hora_inicio", "").strip()
-    duracion_minutos = data.get("duracion_minutos", "").strip()
-    notas = data.get("notas", "").strip()
+    duracion_minutos = data.get("duracion_minutos", "").strip() if isinstance(data.get("duracion_minutos", ""), str) else data.get("duracion_minutos", 60)
 
     if fecha_sesion and hora_inicio:
         try:
             duracion_minutos = int(duracion_minutos or 60)
-        except ValueError:
+        except (ValueError, TypeError):
             duracion_minutos = 60
 
         cursor.execute("""
             INSERT INTO sesiones
-            (nombre_paciente, fecha_sesion, hora_inicio, duracion_minutos, procedimiento, notas, estado)
-            VALUES (?, ?, ?, ?, ?, ?, 'pendiente')
+            (nombre_paciente, fecha_sesion, hora_inicio, duracion_minutos, procedimiento, notas, estado, fecha_registro)
+            VALUES (?, ?, ?, ?, ?, ?, 'pendiente', ?)
         """, (
             nombre,
             fecha_sesion,
             hora_inicio,
             duracion_minutos,
             data.get("procedimiento", ""),
-            notas
+            data.get("notas", ""),
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ))
 
     conexion.commit()
@@ -271,11 +295,6 @@ def crear_paciente(data: dict):
 
 @app.get("/calendario")
 def calendario_api(fecha_inicio: str = ""):
-    """
-    Devuelve las sesiones de la semana indicada.
-    fecha_inicio: lunes de la semana en formato YYYY-MM-DD
-    Si no se indica, usa la semana actual.
-    """
     if not fecha_inicio:
         hoy = datetime.now()
         lunes = hoy - __import__('datetime').timedelta(days=hoy.weekday())
@@ -287,10 +306,10 @@ def calendario_api(fecha_inicio: str = ""):
  
     cursor.execute("""
         SELECT s.id, s.nombre_paciente, s.fecha_sesion, s.hora_inicio,
-               s.duracion_minutos, s.procedimiento, s.notas, s.estado
+               s.duracion_minutos, s.procedimiento, s.notas, s.estado, s.asistencia
         FROM sesiones s
         WHERE s.fecha_sesion >= ? AND s.fecha_sesion <= ?
-          AND s.estado = 'pendiente'
+          AND (s.estado = 'pendiente' OR s.estado = 'completada')
         ORDER BY s.fecha_sesion, s.hora_inicio
     """, (fecha_inicio, sabado.strftime("%Y-%m-%d")))
  
@@ -305,7 +324,8 @@ def calendario_api(fecha_inicio: str = ""):
             "duracion_minutos": f[4],
             "procedimiento": f[5] or "",
             "notas": f[6] or "",
-            "estado": f[7]
+            "estado": f[7],
+            "asistencia": f[8]
         })
  
     return {
@@ -313,27 +333,113 @@ def calendario_api(fecha_inicio: str = ""):
         "semana_fin": sabado.strftime("%Y-%m-%d"),
         "sesiones": sesiones
     }
- 
+
+@app.post("/sesion/marcar_asistencia/{sesion_id}")
+def marcar_asistencia(sesion_id: int, data: dict):
+    """
+    Marca si el paciente asistió o no a la sesión.
+    asistencia: 'si' | 'no'
+    Si asistió, marca la sesión como completada.
+    """
+    asistencia = data.get("asistencia", "no")
+    fecha_registro = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    if asistencia == "si":
+        cursor.execute("""
+            UPDATE sesiones 
+            SET estado='completada', asistencia='si', fecha_registro=?
+            WHERE id=?
+        """, (fecha_registro, sesion_id))
+    else:
+        cursor.execute("""
+            UPDATE sesiones 
+            SET estado='completada', asistencia='no', fecha_registro=?
+            WHERE id=?
+        """, (fecha_registro, sesion_id))
+
+    conexion.commit()
+    
+    # Devolver info actualizada del paciente para el contador
+    cursor.execute("SELECT nombre_paciente FROM sesiones WHERE id=?", (sesion_id,))
+    row = cursor.fetchone()
+    if row:
+        nombre = row[0]
+        cursor.execute("""
+            SELECT COUNT(*) FROM sesiones
+            WHERE nombre_paciente = ? AND asistencia = 'si'
+        """, (nombre,))
+        asistidas = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT nro_sesiones FROM productos WHERE nombre=?", (nombre,))
+        p = cursor.fetchone()
+        nro_programadas = p[0] if p else 0
+
+        # Verificar si se completó el procedimiento
+        procedimiento_completado = nro_programadas > 0 and asistidas >= nro_programadas
+
+        return {
+            "ok": True,
+            "sesion_id": sesion_id,
+            "asistencia": asistencia,
+            "sesiones_asistidas": asistidas,
+            "procedimiento_completado": procedimiento_completado
+        }
+
+    return {"ok": True, "sesion_id": sesion_id}
+
 @app.post("/sesion/completar/{sesion_id}")
 def completar_sesion(sesion_id: int):
-    """Marca la sesion como completada (desencola la cabeza de la cola del paciente)."""
     cursor.execute("UPDATE sesiones SET estado='completada' WHERE id=?", (sesion_id,))
     conexion.commit()
     return {"ok": True, "sesion_id": sesion_id}
  
 @app.post("/sesion/nueva")
-def nueva_sesion(
-    nombre_paciente: str,
-    fecha_sesion: str,
-    hora_inicio: str,
-    duracion_minutos: int = 60,
-    procedimiento: str = "",
-    notas: str = ""
-):
+def nueva_sesion(data: dict):
     """Agrega una nueva sesion a la cola del paciente."""
+    nombre_paciente = data.get("nombre_paciente", "")
+    fecha_sesion = data.get("fecha_sesion", "")
+    hora_inicio = data.get("hora_inicio", "")
+    duracion_minutos = int(data.get("duracion_minutos", 60))
+    procedimiento = data.get("procedimiento", "")
+    notas = data.get("notas", "")
+    fecha_registro = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     cursor.execute("""
-        INSERT INTO sesiones (nombre_paciente, fecha_sesion, hora_inicio, duracion_minutos, procedimiento, notas, estado)
-        VALUES (?,?,?,?,?,?,'pendiente')
-    """, (nombre_paciente, fecha_sesion, hora_inicio, duracion_minutos, procedimiento, notas))
+        INSERT INTO sesiones (nombre_paciente, fecha_sesion, hora_inicio, duracion_minutos, procedimiento, notas, estado, fecha_registro)
+        VALUES (?,?,?,?,?,?,'pendiente',?)
+    """, (nombre_paciente, fecha_sesion, hora_inicio, duracion_minutos, procedimiento, notas, fecha_registro))
     conexion.commit()
     return {"ok": True, "id": cursor.lastrowid}
+
+@app.get("/registros")
+def obtener_registros():
+    """Devuelve todos los registros de sesiones ordenados por fecha de registro."""
+    cursor.execute("""
+        SELECT s.id, s.nombre_paciente, s.fecha_sesion, s.hora_inicio,
+               s.duracion_minutos, s.procedimiento, s.notas, s.estado,
+               s.asistencia, s.fecha_registro,
+               p.nro_sesiones,
+               (SELECT COUNT(*) FROM sesiones s2 WHERE s2.nombre_paciente = s.nombre_paciente AND s2.asistencia = 'si') as sesiones_asistidas
+        FROM sesiones s
+        LEFT JOIN productos p ON p.nombre = s.nombre_paciente
+        WHERE s.fecha_registro IS NOT NULL
+        ORDER BY s.fecha_registro DESC
+    """)
+    filas = cursor.fetchall()
+    registros = []
+    for f in filas:
+        registros.append({
+            "id": f[0],
+            "paciente": f[1],
+            "fecha_sesion": f[2],
+            "hora_inicio": f[3],
+            "duracion_minutos": f[4],
+            "procedimiento": f[5] or "",
+            "notas": f[6] or "",
+            "estado": f[7],
+            "asistencia": f[8],
+            "fecha_registro": f[9],
+            "nro_sesiones_programadas": f[10] or 0,
+            "sesiones_asistidas": f[11] or 0
+        })
+    return {"registros": registros}
