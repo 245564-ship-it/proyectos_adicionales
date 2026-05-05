@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import sqlite3
@@ -33,6 +34,19 @@ CREATE TABLE IF NOT EXISTS productos (
 )
 """)
  
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS registros (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre_paciente TEXT NOT NULL,
+    sesion_id INTEGER,
+    asistio INTEGER NOT NULL,
+    fecha_registro TEXT NOT NULL,
+    observacion TEXT,
+    FOREIGN KEY (sesion_id) REFERENCES sesiones(id)
+)
+""")
+conexion.commit()
+
 # Cola de sesiones: cada fila es una sesion pendiente de un paciente
 # estado: 'pendiente' | 'completada' | 'cancelada'
 cursor.execute("""
@@ -76,6 +90,58 @@ if cursor.fetchone()[0] == 0:
     )
     conexion.commit()
  
+def resumen_paciente(nombre: str):
+    cursor.execute("SELECT nro_sesiones FROM productos WHERE nombre = ?", (nombre,))
+    row = cursor.fetchone()
+    if not row:
+        return None
+
+    programadas = int(row[0] or 0)
+
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM sesiones
+        WHERE nombre_paciente = ? AND estado = 'completada'
+    """, (nombre,))
+    completadas = cursor.fetchone()[0]
+
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM sesiones
+        WHERE nombre_paciente = ? AND estado = 'no_asistio'
+    """, (nombre,))
+    no_asistio = cursor.fetchone()[0]
+
+    estado = "Procedimiento completado" if programadas > 0 and completadas >= programadas else "En proceso"
+
+    cursor.execute("""
+        SELECT fecha_sesion, hora_inicio, duracion_minutos, procedimiento, notas, estado
+        FROM sesiones
+        WHERE nombre_paciente = ? AND estado = 'pendiente'
+        ORDER BY fecha_sesion, hora_inicio
+        LIMIT 1
+    """, (nombre,))
+    prox = cursor.fetchone()
+
+    proxima_sesion = None
+    if prox:
+        proxima_sesion = {
+            "fecha_sesion": prox[0],
+            "hora_inicio": prox[1],
+            "duracion_minutos": prox[2],
+            "procedimiento": prox[3] or "",
+            "notas": prox[4] or "",
+            "estado": prox[5]
+        }
+
+    return {
+        "programadas": programadas,
+        "completadas": completadas,
+        "no_asistio": no_asistio,
+        "estado": estado,
+        "proxima_sesion": proxima_sesion
+    }
+
 # ==============================
 # TRIE
 # ==============================
@@ -186,7 +252,7 @@ def obtener_paciente(nombre: str):
     paciente = dict(zip(keys, row))
 
     cursor.execute("""
-        SELECT fecha_sesion, hora_inicio, duracion_minutos, procedimiento, notas, estado
+        SELECT id, fecha_sesion, hora_inicio, duracion_minutos, procedimiento, notas, estado
         FROM sesiones
         WHERE nombre_paciente = ?
         ORDER BY fecha_sesion, hora_inicio
@@ -196,17 +262,38 @@ def obtener_paciente(nombre: str):
     sesiones = []
     for f in filas:
         sesiones.append({
-            "fecha_sesion": f[0],
-            "hora_inicio": f[1],
-            "duracion_minutos": f[2],
-            "procedimiento": f[3] or "",
-            "notas": f[4] or "",
-            "estado": f[5]
+            "id": f[0],
+            "fecha_sesion": f[1],
+            "hora_inicio": f[2],
+            "duracion_minutos": f[3],
+            "procedimiento": f[4] or "",
+            "notas": f[5] or "",
+            "estado": f[6]
+        })
+
+    cursor.execute("""
+        SELECT id, sesion_id, asistio, fecha_registro, observacion
+        FROM registros
+        WHERE nombre_paciente = ?
+        ORDER BY fecha_registro DESC
+    """, (nombre,))
+    filas_reg = cursor.fetchall()
+
+    registros = []
+    for r in filas_reg:
+        registros.append({
+            "id": r[0],
+            "sesion_id": r[1],
+            "asistio": bool(r[2]),
+            "fecha_registro": r[3],
+            "observacion": r[4] or ""
         })
 
     return {
         "paciente": paciente,
-        "sesiones": sesiones
+        "sesiones": sesiones,
+        "resumen": resumen_paciente(nombre),
+        "registros": registros
     }
 
 @app.post("/crear_paciente")
@@ -271,11 +358,6 @@ def crear_paciente(data: dict):
 
 @app.get("/calendario")
 def calendario_api(fecha_inicio: str = ""):
-    """
-    Devuelve las sesiones de la semana indicada.
-    fecha_inicio: lunes de la semana en formato YYYY-MM-DD
-    Si no se indica, usa la semana actual.
-    """
     if not fecha_inicio:
         hoy = datetime.now()
         lunes = hoy - __import__('datetime').timedelta(days=hoy.weekday())
@@ -290,7 +372,6 @@ def calendario_api(fecha_inicio: str = ""):
                s.duracion_minutos, s.procedimiento, s.notas, s.estado
         FROM sesiones s
         WHERE s.fecha_sesion >= ? AND s.fecha_sesion <= ?
-          AND s.estado = 'pendiente'
         ORDER BY s.fecha_sesion, s.hora_inicio
     """, (fecha_inicio, sabado.strftime("%Y-%m-%d")))
  
@@ -337,3 +418,41 @@ def nueva_sesion(
     """, (nombre_paciente, fecha_sesion, hora_inicio, duracion_minutos, procedimiento, notas))
     conexion.commit()
     return {"ok": True, "id": cursor.lastrowid}
+
+@app.post("/sesion/marcar/{sesion_id}")
+def marcar_sesion(sesion_id: int, data: dict):
+    asistio = bool(data.get("asistio", False))
+
+    cursor.execute("""
+        SELECT nombre_paciente, estado
+        FROM sesiones
+        WHERE id = ?
+    """, (sesion_id,))
+    row = cursor.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Sesión no encontrada")
+
+    nombre_paciente, estado_actual = row
+    nuevo_estado = "completada" if asistio else "no_asistio"
+
+    cursor.execute("""
+        UPDATE sesiones
+        SET estado = ?
+        WHERE id = ?
+    """, (nuevo_estado, sesion_id))
+
+    fecha_registro = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute("""
+        INSERT INTO registros (nombre_paciente, sesion_id, asistio, fecha_registro, observacion)
+        VALUES (?, ?, ?, ?, ?)
+    """, (
+        nombre_paciente,
+        sesion_id,
+        1 if asistio else 0,
+        fecha_registro,
+        "Paciente asistió" if asistio else "Paciente no asistió"
+    ))
+
+    conexion.commit()
+    return {"ok": True, "nombre_paciente": nombre_paciente, "estado": nuevo_estado}

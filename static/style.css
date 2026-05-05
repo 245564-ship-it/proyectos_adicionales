@@ -461,3 +461,68 @@ body {
     background: #1a73e8;
     color: white;
 }
+
+.sesion-item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.estado-badge {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    text-transform: capitalize;
+    background: #e8eaed;
+    color: #444;
+}
+
+.sesion-item.estado-completada {
+    background: #e6f4ea;
+    border-color: #c6e6ce;
+}
+
+.sesion-item.estado-no_asistio {
+    background: #fce8e6;
+    border-color: #f7c7c3;
+}
+
+.sesion-item.estado-pendiente {
+    background: #f8f9fa;
+    border-color: #e3e3e3;
+}
+
+.estado-completada .estado-badge {
+    background: #d7f2dd;
+    color: #137333;
+}
+
+.estado-no_asistio .estado-badge {
+    background: #f8d7da;
+    color: #a50e0e;
+}
+
+.estado-pendiente .estado-badge {
+    background: #e8eaed;
+    color: #5f6368;
+}
+
+.registro-item {
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid #e9e9e9;
+    border-radius: 14px;
+    background: #fafafa;
+}
+
+.registro-verde {
+    background: #e6f4ea;
+    border-color: #c6e6ce;
+}
+
+.registro-rojo {
+    background: #fce8e6;
+    border-color: #f7c7c3;
+}

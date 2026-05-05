@@ -61,6 +61,18 @@
   </div>
 </div>
 
+
+<!-- ============================
+     MODAL REGISTROS
+============================= -->
+<div id="registrosModal" class="modal hidden">
+  <div class="modal-content">
+    <span class="closeBtn" id="closeRegistrosBtn">✖</span>
+    <div id="registrosBody"></div>
+  </div>
+</div>
+
+
 <!-- Popup de sesión -->
 <div class="sesion-popup" id="sesion-popup">
   <div class="sp-nombre" id="sp-nombre"></div>
@@ -118,7 +130,7 @@ input.addEventListener("input", async () => {
     div.className = "item";
     div.innerText = item;
     div.onclick = () => {
-        abrirModal(item, query);
+        abrirModalPaciente(item, query);
         resultados.innerHTML = "";
         input.value = "";
     };
@@ -382,7 +394,7 @@ function renderBloques() {
     const altoPx = Math.max((s.duracion_minutos / 60) * PX_POR_HORA - 4, 20);
 
     const bloque = document.createElement("div");
-    bloque.className = `sesion-bloque color-${colorPaciente(s.paciente)}`;
+    bloque.className = `sesion-bloque estado-${s.estado}`;
     bloque.style.top = topPx + "px";
     bloque.style.height = altoPx + "px";
     bloque.innerHTML = `
@@ -393,6 +405,7 @@ function renderBloques() {
 
     bloque.addEventListener("mouseenter", (e) => mostrarPopup(e, s));
     bloque.addEventListener("mouseleave", () => ocultarPopup());
+    bloque.addEventListener("click", () => abrirDetalleSesion(s));
 
     cell.appendChild(bloque);
   });
@@ -478,6 +491,126 @@ function scrollAlInicio() {
   const grid = document.getElementById("cal-grid");
   // Scrollear a las 9 AM (primer fila visible)
   grid.scrollTop = 0;
+}
+
+// ================================================
+// NUEVAS FUNCIONES (PACIENTE + SESIONES)
+// ================================================
+
+async function abrirModalPaciente(nombre) {
+  if (nombre.startsWith("➕")) {
+    abrirModal(nombre, nombre.replace("➕ Crear '","").replace("'",""));
+    return;
+  }
+
+  const res = await fetch(`/paciente?nombre=${encodeURIComponent(nombre)}`);
+  const data = await res.json();
+
+  if (data.error) {
+    modalBody.innerHTML = `<p>No encontrado.</p>`;
+    modal.classList.remove("hidden");
+    return;
+  }
+
+  modal.classList.remove("hidden");
+  renderPaciente(data);
+}
+
+function renderPaciente(data) {
+  const p = data.paciente;
+  const sesiones = data.sesiones || [];
+  const resumen = data.resumen || {};
+  const registros = data.registros || [];
+
+  modalBody.innerHTML = `
+    <h2>${p.nombre}</h2>
+
+    <div class="datos-paciente">
+      <p><b>Sesiones programadas:</b> ${p.nro_sesiones}</p>
+      <p><b>Completadas:</b> ${resumen.completadas ?? 0}</p>
+      <p><b>No asistió:</b> ${resumen.no_asistio ?? 0}</p>
+      <p><b>Estado:</b> ${resumen.estado}</p>
+      <p><b>Próxima sesión:</b> ${
+        resumen.proxima_sesion
+          ? `${resumen.proxima_sesion.fecha_sesion} ${resumen.proxima_sesion.hora_inicio}`
+          : "—"
+      }</p>
+    </div>
+
+    <div class="form-actions" style="justify-content:flex-start; margin-top:16px;">
+      <button id="btnVerRegistros">Ver registros</button>
+    </div>
+
+    <h3>Sesiones</h3>
+    ${
+      sesiones.map(s => `
+        <div class="sesion-item estado-${s.estado}">
+          <p><b>${s.fecha_sesion} ${s.hora_inicio}</b></p>
+          <p>${s.procedimiento || ""}</p>
+
+          <button onclick="marcarSesion(${s.id}, true, '${p.nombre}')">Asistió</button>
+          <button onclick="marcarSesion(${s.id}, false, '${p.nombre}')">No asistió</button>
+        </div>
+      `).join("")
+    }
+  `;
+
+  document.getElementById("btnVerRegistros").onclick = () => abrirRegistros(registros);
+}
+
+// ================================================
+// MARCAR SESION
+// ================================================
+async function marcarSesion(id, asistio, nombre) {
+  await fetch(`/sesion/marcar/${id}`, {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({asistio})
+  });
+
+  abrirModalPaciente(nombre);
+  actualizar();
+}
+
+// ================================================
+// REGISTROS
+// ================================================
+const registrosModal = document.getElementById("registrosModal");
+const registrosBody = document.getElementById("registrosBody");
+
+function abrirRegistros(registros) {
+  registrosModal.classList.remove("hidden");
+
+  registrosBody.innerHTML = `
+    <h2>Registros</h2>
+    ${
+      registros.map(r => `
+        <div class="registro-item ${r.asistio ? "registro-verde" : "registro-rojo"}">
+          <p>${r.fecha_registro}</p>
+          <p>${r.asistio ? "Asistió" : "No asistió"}</p>
+        </div>
+      `).join("")
+    }
+  `;
+}
+
+document.getElementById("closeRegistrosBtn").onclick = () => {
+  registrosModal.classList.add("hidden");
+};
+
+// ================================================
+// CLICK EN BLOQUES DEL CALENDARIO
+// ================================================
+function abrirDetalleSesion(s) {
+  modal.classList.remove("hidden");
+
+  modalBody.innerHTML = `
+    <h2>${s.paciente}</h2>
+    <p>${s.fecha} ${s.hora_inicio}</p>
+
+    <button onclick="marcarSesion(${s.id}, true, '${s.paciente}')">Asistió</button>
+    <button onclick="marcarSesion(${s.id}, false, '${s.paciente}')">No asistió</button>
+  `;
 }
 
 // ================================================
