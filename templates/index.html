@@ -8,47 +8,35 @@
 </head>
 <body>
 
-<!-- ============================
-     BARRA DE BUSQUEDA
-============================= -->
+<!-- BARRA DE BUSQUEDA -->
 <div class="search-wrapper">
   <div class="container">
     <input type="text" id="search" placeholder="Buscar paciente..." autocomplete="off">
     <div id="resultados"></div>
   </div>
-  <button class="btn-registros" id="btnRegistros" title="Ver registros">📋 Registros</button>
+  <button class="btn-registros" id="btnRegistros">📋 Registros</button>
 </div>
 
-<!-- ============================
-     CALENDARIO SEMANAL
-============================= -->
+<!-- CALENDARIO -->
 <div class="calendario-layout">
   <div class="cal-card">
-
     <div class="cal-header">
       <div>
         <div class="cal-header-title" id="cal-titulo">Semana</div>
         <div class="cal-header-sub" id="cal-subtitulo"></div>
       </div>
       <div class="cal-nav">
-        <button class="cal-btn" id="btn-ant" title="Semana anterior">&#8249;</button>
+        <button class="cal-btn" id="btn-ant">&#8249;</button>
         <button class="cal-btn cal-btn-hoy" id="btn-hoy">Hoy</button>
-        <button class="cal-btn" id="btn-sig" title="Semana siguiente">&#8250;</button>
+        <button class="cal-btn" id="btn-sig">&#8250;</button>
       </div>
     </div>
-
-    <div class="cal-days-header" id="cal-days-header">
-      <div></div>
-    </div>
-
+    <div class="cal-days-header" id="cal-days-header"><div></div></div>
     <div class="cal-grid" id="cal-grid"></div>
-
   </div>
 </div>
 
-<!-- ============================
-     MODAL PACIENTE / CREAR
-============================= -->
+<!-- MODAL PACIENTE / CREAR -->
 <div id="modal" class="modal hidden">
   <div class="modal-content">
     <span class="closeBtn" id="closeBtn">✖</span>
@@ -56,9 +44,7 @@
   </div>
 </div>
 
-<!-- ============================
-     MODAL ASISTENCIA
-============================= -->
+<!-- MODAL ASISTENCIA -->
 <div id="modalAsistencia" class="modal hidden">
   <div class="modal-content modal-asistencia-content">
     <span class="closeBtn" id="closeBtnAsistencia">✖</span>
@@ -66,9 +52,7 @@
   </div>
 </div>
 
-<!-- ============================
-     MODAL REGISTROS
-============================= -->
+<!-- MODAL REGISTROS -->
 <div id="modalRegistros" class="modal hidden">
   <div class="modal-content modal-registros-content">
     <span class="closeBtn" id="closeBtnRegistros">✖</span>
@@ -76,26 +60,24 @@
   </div>
 </div>
 
-<!-- Popup de sesión -->
+<!-- Popup hover -->
 <div class="sesion-popup" id="sesion-popup">
   <div class="sp-nombre" id="sp-nombre"></div>
   <div class="sp-row"><span class="sp-label">Fecha</span><span id="sp-fecha"></span></div>
   <div class="sp-row"><span class="sp-label">Hora</span><span id="sp-hora"></span></div>
   <div class="sp-row"><span class="sp-label">Duración</span><span id="sp-dur"></span></div>
-  <div class="sp-row" id="sp-proc-row"><span class="sp-label">Procedimiento</span><span id="sp-proc"></span></div>
-  <div class="sp-row" id="sp-notas-row"><span class="sp-label">Notas</span><span id="sp-notas"></span></div>
+  <div class="sp-row"><span class="sp-label">Procedimiento</span><span id="sp-proc"></span></div>
   <div class="sp-row"><span class="sp-label">Estado</span><span id="sp-estado"></span></div>
 </div>
 
 <script>
 // ================================================
-// CONFIGURACION
+// CONFIG
 // ================================================
-const HORA_INICIO = 9;
-const HORA_FIN    = 21;
-const PX_POR_HORA = 60;
-const DIAS = ["Lun","Mar","Mié","Jue","Vie","Sáb"];
-const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+const HORA_INICIO = 9, HORA_FIN = 21, PX_POR_HORA = 60;
+const DIAS  = ["Lun","Mar","Mié","Jue","Vie","Sáb"];
+const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio",
+               "agosto","septiembre","octubre","noviembre","diciembre"];
 
 let semanaActual = lunesDe(new Date());
 let sesionesCache = [];
@@ -105,24 +87,20 @@ let colorIdx = 0;
 // ================================================
 // MODAL PRINCIPAL
 // ================================================
-const modal = document.getElementById("modal");
+const modal     = document.getElementById("modal");
 const modalBody = document.getElementById("modalBody");
-const closeBtn = document.getElementById("closeBtn");
+const closeBtn  = document.getElementById("closeBtn");
 
-function cerrarModal() {
-  modal.classList.add("hidden");
-  modalBody.innerHTML = "";
-}
-
+function cerrarModal() { modal.classList.add("hidden"); modalBody.innerHTML = ""; }
 closeBtn.addEventListener("click", cerrarModal);
-modal.addEventListener("click", (e) => { if (e.target === modal) cerrarModal(); });
+modal.addEventListener("click", e => { if (e.target === modal) cerrarModal(); });
 
 // ================================================
 // MODAL ASISTENCIA
 // ================================================
-const modalAsistencia = document.getElementById("modalAsistencia");
-const asistenciaBody = document.getElementById("asistenciaBody");
-const closeBtnAsistencia = document.getElementById("closeBtnAsistencia");
+const modalAsistencia  = document.getElementById("modalAsistencia");
+const asistenciaBody   = document.getElementById("asistenciaBody");
+const closeBtnAsist    = document.getElementById("closeBtnAsistencia");
 let asistenciaCallback = null;
 
 function cerrarModalAsistencia() {
@@ -130,51 +108,45 @@ function cerrarModalAsistencia() {
   asistenciaBody.innerHTML = "";
   asistenciaCallback = null;
 }
-
-closeBtnAsistencia.addEventListener("click", cerrarModalAsistencia);
-modalAsistencia.addEventListener("click", (e) => { if (e.target === modalAsistencia) cerrarModalAsistencia(); });
+closeBtnAsist.addEventListener("click", cerrarModalAsistencia);
+modalAsistencia.addEventListener("click", e => { if (e.target === modalAsistencia) cerrarModalAsistencia(); });
 
 function abrirModalAsistencia(sesion, onDone) {
   asistenciaCallback = onDone;
-  const estadoLabel = sesion.asistencia === 'si'
-    ? '<span style="color:#137333;font-weight:600;">✔ Asistió</span>'
-    : sesion.asistencia === 'no'
-      ? '<span style="color:#a50e0e;font-weight:600;">✘ No asistió</span>'
-      : '<span style="color:#888;">Sin registrar</span>';
+  const nombrePaciente = sesion.paciente || sesion.nombre_paciente || "";
+  const estadoActual = sesion.asistencia === "si"
+    ? `<span style="color:#137333;font-weight:600;">✔ Asistió</span>`
+    : sesion.asistencia === "no"
+      ? `<span style="color:#a50e0e;font-weight:600;">✘ No asistió</span>`
+      : `<span style="color:#888;">Sin registrar</span>`;
 
   asistenciaBody.innerHTML = `
     <div class="asistencia-header">
       <div class="asistencia-icon">📋</div>
       <h2>Registrar asistencia</h2>
-      <p class="asistencia-sub">Sesión de <b>${sesion.paciente || sesion.nombre_paciente}</b></p>
+      <p class="asistencia-sub">Sesión de <b style="text-transform:capitalize">${nombrePaciente}</b></p>
     </div>
     <div class="asistencia-info">
       <span>📅 ${sesion.fecha || sesion.fecha_sesion}</span>
       <span>🕐 ${sesion.hora_inicio}</span>
       <span>⏱ ${sesion.duracion_minutos} min</span>
-      ${sesion.procedimiento ? `<span>💆 ${sesion.procedimiento}</span>` : ''}
+      ${sesion.procedimiento ? `<span>💆 ${sesion.procedimiento}</span>` : ""}
     </div>
-    ${sesion.asistencia ? `<div class="asistencia-estado-actual">Estado actual: ${estadoLabel}</div>` : ''}
+    ${sesion.asistencia ? `<div class="asistencia-estado-actual">Estado actual: ${estadoActual}</div>` : ""}
     <div class="asistencia-botones">
-      <button class="btn-asistio" id="btnAsistio">
-        <span class="btn-icon">✔</span>
-        <span>Sí asistió</span>
-      </button>
-      <button class="btn-no-asistio" id="btnNoAsistio">
-        <span class="btn-icon">✘</span>
-        <span>No asistió</span>
-      </button>
+      <button class="btn-asistio" id="btnAsistio"><span class="btn-icon">✔</span><span>Sí asistió</span></button>
+      <button class="btn-no-asistio" id="btnNoAsistio"><span class="btn-icon">✘</span><span>No asistió</span></button>
     </div>
   `;
-
   modalAsistencia.classList.remove("hidden");
 
   document.getElementById("btnAsistio").onclick = async () => {
-    await registrarAsistencia(sesion.id, "si");
+    const r = await registrarAsistencia(sesion.id, "si");
     cerrarModalAsistencia();
+    if (r.procedimiento_completado)
+      setTimeout(() => mostrarNotificacion("🎉 ¡Procedimiento completado! El paciente cumplió todas sus sesiones.", "success"), 200);
     if (asistenciaCallback) asistenciaCallback();
   };
-
   document.getElementById("btnNoAsistio").onclick = async () => {
     await registrarAsistencia(sesion.id, "no");
     cerrarModalAsistencia();
@@ -188,51 +160,39 @@ async function registrarAsistencia(sesionId, asistencia) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ asistencia })
   });
-  const data = await res.json();
-
-  if (data.procedimiento_completado) {
-    setTimeout(() => {
-      mostrarNotificacion("🎉 ¡Procedimiento completado! El paciente ha cumplido todas sus sesiones.", "success");
-    }, 300);
-  }
-
-  return data;
+  return await res.json();
 }
 
 // ================================================
 // MODAL REGISTROS
 // ================================================
-const modalRegistros = document.getElementById("modalRegistros");
-const registrosBody = document.getElementById("registrosBody");
+const modalRegistros   = document.getElementById("modalRegistros");
+const registrosBody    = document.getElementById("registrosBody");
 const closeBtnRegistros = document.getElementById("closeBtnRegistros");
 
 function cerrarModalRegistros() {
   modalRegistros.classList.add("hidden");
   registrosBody.innerHTML = "";
 }
-
 closeBtnRegistros.addEventListener("click", cerrarModalRegistros);
-modalRegistros.addEventListener("click", (e) => { if (e.target === modalRegistros) cerrarModalRegistros(); });
-
+modalRegistros.addEventListener("click", e => { if (e.target === modalRegistros) cerrarModalRegistros(); });
 document.getElementById("btnRegistros").addEventListener("click", abrirModalRegistros);
 
 async function abrirModalRegistros() {
   modalRegistros.classList.remove("hidden");
   registrosBody.innerHTML = `<div class="loading-registros">⏳ Cargando registros...</div>`;
 
-  const res = await fetch("/registros");
+  const res  = await fetch("/registros");
   const data = await res.json();
   const registros = data.registros || [];
 
   if (!registros.length) {
-    registrosBody.innerHTML = `
-      <h2>📋 Registros de sesiones</h2>
-      <p style="color:#888;margin-top:16px;">No hay registros aún.</p>
-    `;
+    registrosBody.innerHTML = `<h2 style="margin-bottom:16px">📋 Registros de sesiones</h2>
+      <p style="color:#888">No hay registros aún. Los registros aparecen cuando marcas la asistencia de una sesión.</p>`;
     return;
   }
 
-  // Agrupar por fecha de registro (día)
+  // Agrupar por día de registro
   const grupos = {};
   registros.forEach(r => {
     const dia = r.fecha_registro ? r.fecha_registro.split(" ")[0] : "Sin fecha";
@@ -240,33 +200,43 @@ async function abrirModalRegistros() {
     grupos[dia].push(r);
   });
 
-  let html = `<h2>📋 Registros de sesiones</h2>`;
+  const totalAsistio  = registros.filter(r => r.asistencia === "si").length;
+  const totalNoAsistio = registros.filter(r => r.asistencia === "no").length;
+
+  let html = `
+    <div class="registros-header-row">
+      <h2>📋 Registros de sesiones</h2>
+      <span class="reg-resumen">
+        Total: ${registros.length} &nbsp;·&nbsp;
+        <span style="color:#137333">✔ ${totalAsistio} asistieron</span> &nbsp;·&nbsp;
+        <span style="color:#a50e0e">✘ ${totalNoAsistio} no asistieron</span>
+      </span>
+    </div>`;
 
   Object.entries(grupos).forEach(([dia, items]) => {
-    html += `<div class="reg-grupo-fecha">${formatearFechaLarga(dia)}</div>`;
+    html += `<div class="reg-grupo-fecha">📅 ${formatearFechaLarga(dia)}</div>`;
     items.forEach(r => {
-      const asistenciaClass = r.asistencia === 'si' ? 'reg-asistio' : r.asistencia === 'no' ? 'reg-no-asistio' : 'reg-sin-registro';
-      const asistenciaLabel = r.asistencia === 'si' ? '✔ Asistió' : r.asistencia === 'no' ? '✘ No asistió' : '— Sin registrar';
-      const progreso = r.nro_sesiones_programadas > 0
-        ? `${r.sesiones_asistidas}/${r.nro_sesiones_programadas}`
+      const cls   = r.asistencia === "si" ? "reg-asistio" : r.asistencia === "no" ? "reg-no-asistio" : "";
+      const label = r.asistencia === "si" ? "✔ Asistió" : r.asistencia === "no" ? "✘ No asistió" : "— Sin registrar";
+      const horaReg = r.fecha_registro ? r.fecha_registro.split(" ")[1].slice(0, 5) : "";
+      const prog = r.nro_sesiones_programadas > 0
+        ? `${r.sesiones_asistidas}/${r.nro_sesiones_programadas} sesiones`
         : `${r.sesiones_asistidas} asistidas`;
-      const horaReg = r.fecha_registro ? r.fecha_registro.split(" ")[1].substring(0,5) : "";
 
       html += `
-        <div class="reg-item ${asistenciaClass}">
+        <div class="reg-item ${cls}">
           <div class="reg-item-header">
             <span class="reg-paciente">${r.paciente}</span>
-            <span class="reg-hora-reg">${horaReg}</span>
+            <span class="reg-hora-reg">Registrado a las ${horaReg}</span>
           </div>
           <div class="reg-item-info">
-            <span>📅 ${r.fecha_sesion} · 🕐 ${r.hora_inicio}</span>
-            ${r.procedimiento ? `<span>💆 ${r.procedimiento}</span>` : ''}
-            <span class="reg-asistencia-badge">${asistenciaLabel}</span>
-            <span class="reg-progreso">Progreso: ${progreso}</span>
+            <span>📅 ${r.fecha_sesion} · 🕐 ${r.hora_inicio} · ⏱ ${r.duracion_minutos} min</span>
+            ${r.procedimiento ? `<span class="reg-proc-badge">💆 ${r.procedimiento}</span>` : ""}
+            <span class="reg-asistencia-badge">${label}</span>
+            <span class="reg-progreso">${prog}</span>
           </div>
-          ${r.notas ? `<div class="reg-notas">📝 ${r.notas}</div>` : ''}
-        </div>
-      `;
+          ${r.notas ? `<div class="reg-notas">📝 ${r.notas}</div>` : ""}
+        </div>`;
     });
   });
 
@@ -276,81 +246,102 @@ async function abrirModalRegistros() {
 // ================================================
 // BARRA DE BUSQUEDA
 // ================================================
-const input = document.getElementById("search");
+const input     = document.getElementById("search");
 const resultados = document.getElementById("resultados");
 
 input.addEventListener("input", async () => {
-  let query = input.value;
+  const query = input.value;
   if (!query) { resultados.innerHTML = ""; return; }
-  let res = await fetch(`/buscar?q=${encodeURIComponent(query)}`);
-  let data = await res.json();
+  const res  = await fetch(`/buscar?q=${encodeURIComponent(query)}`);
+  const data = await res.json();
   resultados.innerHTML = "";
   data.forEach(item => {
-    let div = document.createElement("div");
+    const div = document.createElement("div");
     div.className = "item";
     div.innerText = item;
-    div.onclick = () => {
-      abrirModal(item, query);
-      resultados.innerHTML = "";
-      input.value = "";
-    };
+    div.onclick = () => { abrirModal(item, query); resultados.innerHTML = ""; input.value = ""; };
     resultados.appendChild(div);
   });
 });
 
-document.addEventListener("click", (e) => {
-  if (!e.target.closest(".container")) {
-    resultados.innerHTML = "";
-  }
-});
+document.addEventListener("click", e => { if (!e.target.closest(".container")) resultados.innerHTML = ""; });
 
 // ================================================
-// MODAL PACIENTE / CREAR
+// ABRIR MODAL GENERAL
 // ================================================
 async function abrirModal(item, query) {
   modal.classList.remove("hidden");
 
   if (item.startsWith("➕")) {
+    // Extraer nombre real de la query (lo que escribió el usuario)
+    const nombreBuscado = query.trim();
+
+    // Intentar pre-rellenar si el paciente ya existe en la BD
+    let datosExistentes = null;
+    try {
+      const rBase = await fetch(`/paciente_base?nombre=${encodeURIComponent(nombreBuscado)}`);
+      const dBase = await rBase.json();
+      if (dBase.existe) datosExistentes = dBase;
+    } catch(e) {}
+
+    const d = datosExistentes || {};
+    const esExistente = !!datosExistentes;
+
     modalBody.innerHTML = `
-      <h2>Crear Paciente</h2>
-      <form id="formCrear" class="form-grid">
+      <h2>${esExistente ? "✏️ Actualizar paciente" : "➕ Crear Paciente"}</h2>
+      ${esExistente ? `<p style="font-size:13px;color:#1a73e8;margin-bottom:12px;background:#e8f0fe;padding:8px 12px;border-radius:10px;">
+        El paciente <b>${nombreBuscado}</b> ya existe. Puedes actualizar sus datos o agregar un nuevo procedimiento.</p>` : ""}
+
+      <form id="formCrear" class="form-grid" autocomplete="off">
         <div class="form-span-2">
-          <input name="nombre" placeholder="Nombre" value="${query}" required>
+          <input name="nombre" placeholder="Nombre" value="${d.nombre || nombreBuscado}" required>
         </div>
-        <input name="procedimiento" placeholder="Procedimiento" required>
-        <input name="nro_sesiones" type="number" min="0" placeholder="Nro sesiones programadas" required>
-        <input name="nro_whatsapp" placeholder="WhatsApp">
-        <input name="edad" type="number" min="0" placeholder="Edad" required>
-        <input name="tiene_diabetes" placeholder="Diabetes (si/no)">
-        <input name="tiene_hipertension" placeholder="Hipertensión (si/no)">
+
+        <div class="form-span-2" style="border-top:1px solid #eee;padding-top:12px;margin-top:4px">
+          <b style="font-size:13px;color:#555">${esExistente ? "Nuevo procedimiento (dejar vacío para no agregar)" : "Procedimiento"}</b>
+        </div>
+        <input name="procedimiento" placeholder="Nombre del procedimiento"
+               value="${esExistente ? "" : (d.ultimo_procedimiento || "")}">
+        <input name="nro_sesiones" type="number" min="1" placeholder="Nro sesiones" value="${esExistente ? "" : (d.ultima_nro_sesiones || 1)}">
+
+        <div class="form-span-2" style="border-top:1px solid #eee;padding-top:12px;margin-top:4px">
+          <b style="font-size:13px;color:#555">Datos del paciente</b>
+        </div>
+        <input name="nro_whatsapp" placeholder="WhatsApp" value="${d.nro_whatsapp || ""}">
+        <input name="edad" type="number" min="0" placeholder="Edad" value="${d.edad || ""}">
+        <input name="tiene_diabetes" placeholder="Diabetes (si/no)" value="${d.tiene_diabetes || ""}">
+        <input name="tiene_hipertension" placeholder="Hipertensión (si/no)" value="${d.tiene_hipertension || ""}">
         <div class="form-span-2">
-          <input name="antecedentes" placeholder="Antecedentes">
+          <input name="antecedentes" placeholder="Antecedentes" value="${d.antecedentes || ""}">
         </div>
-        <div class="form-span-2"><h3>Primera sesión (opcional)</h3></div>
+
+        <div class="form-span-2" style="border-top:1px solid #eee;padding-top:12px;margin-top:4px">
+          <b style="font-size:13px;color:#555">Primera sesión para este procedimiento (opcional)</b>
+        </div>
         <input name="fecha_sesion" type="date">
         <input name="hora_inicio" type="time">
         <input name="duracion_minutos" type="number" min="15" value="60" placeholder="Duración min">
         <div class="form-span-2">
-          <input name="notas" placeholder="Notas">
+          <input name="notas" placeholder="Notas de la sesión">
         </div>
+
         <div class="form-actions form-span-2">
           <button type="button" id="btnCancelar">Cancelar</button>
-          <button type="submit">Guardar</button>
+          <button type="submit">${esExistente ? "Guardar cambios" : "Crear paciente"}</button>
         </div>
       </form>
     `;
 
     document.getElementById("btnCancelar").onclick = cerrarModal;
-
-    document.getElementById("formCrear").addEventListener("submit", async (e) => {
+    document.getElementById("formCrear").addEventListener("submit", async e => {
       e.preventDefault();
       const f = e.currentTarget;
-      const data = {
+      const payload = {
         nombre: f.nombre.value,
         procedimiento: f.procedimiento.value,
-        nro_sesiones: f.nro_sesiones.value,
+        nro_sesiones: f.nro_sesiones.value || 1,
         nro_whatsapp: f.nro_whatsapp.value,
-        edad: f.edad.value,
+        edad: f.edad.value || 0,
         tiene_diabetes: f.tiene_diabetes.value,
         tiene_hipertension: f.tiene_hipertension.value,
         antecedentes: f.antecedentes.value,
@@ -359,106 +350,231 @@ async function abrirModal(item, query) {
         duracion_minutos: f.duracion_minutos.value,
         notas: f.notas.value
       };
-
       const res = await fetch("/crear_paciente", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
+        body: JSON.stringify(payload)
       });
-
-      if (!res.ok) {
-        const err = await res.json();
-        alert(err.detail || "No se pudo guardar");
-        return;
-      }
-
+      if (!res.ok) { const err = await res.json(); alert(err.detail || "Error"); return; }
+      const result = await res.json();
       cerrarModal();
       await actualizar();
+      mostrarNotificacion(result.es_nuevo ? `✔ Paciente "${result.nombre}" creado correctamente.` : `✔ Datos de "${result.nombre}" actualizados.`, "success");
     });
-
     return;
   }
 
   await cargarModalPaciente(item);
 }
 
+// ================================================
+// MODAL PACIENTE — VISTA COMPLETA
+// ================================================
 async function cargarModalPaciente(nombre) {
-  const res = await fetch(`/paciente?nombre=${encodeURIComponent(nombre)}`);
+  const res  = await fetch(`/paciente?nombre=${encodeURIComponent(nombre)}`);
   const data = await res.json();
+  if (data.error) { modalBody.innerHTML = `<p>No encontrado.</p>`; return; }
 
-  if (data.error) {
-    modalBody.innerHTML = `<p>No encontrado.</p>`;
-    return;
-  }
-
-  const p = data.paciente;
-  const sesiones = data.sesiones || [];
-  const asistidas = p.sesiones_asistidas || 0;
-  const programadas = p.nro_sesiones || 0;
-  const completado = p.estado_procedimiento === "completado";
-
-  const pct = programadas > 0 ? Math.min(100, Math.round((asistidas / programadas) * 100)) : 0;
-  const estadoBadge = completado
-    ? `<span class="badge-completado">✔ Procedimiento completado</span>`
-    : `<span class="badge-en-progreso">⏳ En progreso</span>`;
+  const p    = data.paciente;
+  const procs = data.procedimientos || [];
 
   modalBody.innerHTML = `
     <div class="paciente-header">
       <h2>${p.nombre}</h2>
-      ${estadoBadge}
-    </div>
-
-    <div class="contador-sesiones">
-      <div class="contador-info">
-        <span class="contador-num">${asistidas}</span>
-        <span class="contador-de">/ ${programadas}</span>
-        <span class="contador-label">sesiones asistidas</span>
-      </div>
-      <div class="barra-progreso-wrap">
-        <div class="barra-progreso" style="width:${pct}%"></div>
-      </div>
     </div>
 
     <div class="datos-paciente">
-      <p><b>Registro:</b> ${p.fecha}</p>
-      <p><b>Procedimiento:</b> ${p.procedimiento}</p>
+      <p><b>Registrado:</b> ${p.fecha || "—"}</p>
       <p><b>WhatsApp:</b> ${p.nro_whatsapp || "—"}</p>
-      <p><b>Edad:</b> ${p.edad}</p>
+      <p><b>Edad:</b> ${p.edad || "—"}</p>
       <p><b>Diabetes:</b> ${p.tiene_diabetes || "—"}</p>
       <p><b>Hipertensión:</b> ${p.tiene_hipertension || "—"}</p>
-      <p class="form-span-2"><b>Antecedentes:</b> ${p.antecedentes || "—"}</p>
+      <p><b>Antecedentes:</b> ${p.antecedentes || "—"}</p>
     </div>
 
-    <div class="seccion-sesiones-header">
-      <h3>Sesiones</h3>
+    <div id="seccionProcedimientos">
+      ${procs.length ? procs.map(proc => renderProcCard(proc, nombre)).join("") : `<p style="color:#aaa;margin-bottom:16px;">Sin procedimientos registrados.</p>`}
     </div>
 
-    <div id="listaSesiones">
-      ${renderSesionesHTML(sesiones, nombre)}
-    </div>
-
-    <div class="seccion-nueva-sesion">
-      <h3>➕ Programar próxima sesión</h3>
-      <div class="form-grid" id="formNuevaSesion">
-        <input id="ns_fecha" type="date" placeholder="Fecha">
-        <input id="ns_hora" type="time" placeholder="Hora">
-        <input id="ns_duracion" type="number" min="15" value="60" placeholder="Duración min">
-        <input id="ns_procedimiento" placeholder="Procedimiento">
-        <div class="form-span-2">
-          <input id="ns_notas" placeholder="Notas (opcional)">
-        </div>
-        <div class="form-actions form-span-2">
-          <button type="button" id="btnGuardarSesion">Guardar sesión</button>
+    <!-- Nuevo procedimiento -->
+    <div class="seccion-nuevo-proc" id="secNuevoProc">
+      <h3>➕ Agregar nuevo procedimiento</h3>
+      <p>Registra un procedimiento adicional para este paciente</p>
+      <button class="btn-expandir-proc" id="btnMostrarFormProc">Agregar procedimiento</button>
+      <div class="nuevo-proc-form hidden" id="formNuevoProcWrap">
+        <div class="form-grid">
+          <div class="form-span-2">
+            <input id="np_nombre" placeholder="Nombre del procedimiento" style="width:100%;padding:12px 14px;border:1px solid #d8d8d8;border-radius:12px;outline:none;font:inherit">
+          </div>
+          <input id="np_nro" type="number" min="1" value="1" placeholder="Nro sesiones" style="padding:12px 14px;border:1px solid #d8d8d8;border-radius:12px;outline:none;font:inherit">
+          <div style="display:flex;justify-content:flex-end">
+            <button class="btn-primary" id="btnGuardarNuevoProc">Guardar procedimiento</button>
+          </div>
         </div>
       </div>
     </div>
   `;
 
-  // Botones de asistencia en sesiones listadas
+  // Expandir form nuevo procedimiento
+  document.getElementById("btnMostrarFormProc").addEventListener("click", () => {
+    document.getElementById("formNuevoProcWrap").classList.toggle("hidden");
+  });
+
+  document.getElementById("btnGuardarNuevoProc").addEventListener("click", async () => {
+    const npNombre = document.getElementById("np_nombre").value.trim();
+    const npNro    = parseInt(document.getElementById("np_nro").value) || 1;
+    if (!npNombre) { alert("Escribe el nombre del procedimiento."); return; }
+
+    const res = await fetch("/procedimiento/nuevo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nombre_paciente: nombre, nombre_procedimiento: npNombre, nro_sesiones: npNro })
+    });
+    if (!res.ok) { const e = await res.json(); alert(e.detail || "Error"); return; }
+    await cargarModalPaciente(nombre);
+    mostrarNotificacion(`✔ Procedimiento "${npNombre}" agregado.`, "success");
+  });
+
+  // Adjuntar eventos a todos los botones de sesiones y asistencia
+  adjuntarEventosSesiones(procs, nombre);
+}
+
+function renderProcCard(proc, nombrePaciente) {
+  const asistidas    = proc.sesiones_asistidas;
+  const programadas  = proc.nro_sesiones;
+  const completado   = proc.estado === "completado";
+  const pct          = programadas > 0 ? Math.min(100, Math.round((asistidas / programadas) * 100)) : 0;
+  const barraClass   = completado ? "barra-progreso barra-completada" : "barra-progreso";
+
+  const badgeEstado = completado
+    ? `<span class="badge-completado">✔ Completado</span>`
+    : `<span class="badge-en-progreso">⏳ En progreso</span>`;
+
+  const sesionesHTML = proc.sesiones.length
+    ? proc.sesiones.map(s => renderSesionItem(s)).join("")
+    : `<p style="color:#aaa;font-size:13px;padding:8px 0">Sin sesiones programadas.</p>`;
+
+  return `
+    <div class="proc-card" id="proc-card-${proc.id}">
+      <div class="proc-card-header">
+        <div>
+          <div class="proc-card-titulo">💆 ${proc.nombre_procedimiento}</div>
+          <div class="proc-card-meta">Inicio: ${proc.fecha_inicio || "—"} · ${programadas} sesiones programadas</div>
+        </div>
+        ${badgeEstado}
+      </div>
+
+      <div class="contador-sesiones">
+        <div class="contador-info">
+          <span class="contador-num">${asistidas}</span>
+          <span class="contador-de">/ ${programadas}</span>
+          <span class="contador-label">sesiones asistidas</span>
+        </div>
+        <div class="barra-progreso-wrap">
+          <div class="${barraClass}" style="width:${pct}%"></div>
+        </div>
+      </div>
+
+      <div class="proc-sesiones-lista" id="sesiones-proc-${proc.id}">
+        ${sesionesHTML}
+      </div>
+
+      <div class="seccion-nueva-sesion">
+        <h4>➕ Programar nueva sesión</h4>
+        <div class="form-grid">
+          <input class="ns_fecha" data-proc="${proc.id}" type="date">
+          <input class="ns_hora"  data-proc="${proc.id}" type="time">
+          <input class="ns_dur"   data-proc="${proc.id}" type="number" min="15" value="60" placeholder="Duración min">
+          <input class="ns_notas" data-proc="${proc.id}" placeholder="Notas (opcional)">
+          <div class="form-actions form-span-2">
+            <button class="btn-primary btn-guardar-sesion" data-proc="${proc.id}"
+              data-proc-nombre="${proc.nombre_procedimiento}"
+              data-paciente="${nombrePaciente}">
+              Guardar sesión
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderSesionItem(s) {
+  let cls   = "";
+  let badge = "";
+  let btnLbl = "Registrar asistencia";
+
+  if (s.asistencia === "si") {
+    cls   = "sesion-asistio";
+    badge = `<span class="badge-asistio">✔ Asistió</span>`;
+    btnLbl = "Cambiar";
+  } else if (s.asistencia === "no") {
+    cls   = "sesion-no-asistio";
+    badge = `<span class="badge-no-asistio">✘ No asistió</span>`;
+    btnLbl = "Cambiar";
+  }
+
+  const fechaReg = s.fecha_registro
+    ? `<span class="reg-fecha-mini">Registrado: ${s.fecha_registro}</span>` : "";
+
+  return `
+    <div class="sesion-item ${cls}">
+      <div class="sesion-item-header">
+        <div>
+          <span class="sesion-fecha-hora">📅 ${s.fecha_sesion} · 🕐 ${s.hora_inicio} · ⏱ ${s.duracion_minutos} min</span>
+          ${s.notas ? `<span class="sesion-notas">📝 ${s.notas}</span>` : ""}
+          ${fechaReg}
+        </div>
+        <div class="sesion-item-acciones">
+          ${badge}
+          <button class="btn-marcar-asistencia" data-sesion-id="${s.id}">${btnLbl}</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function adjuntarEventosSesiones(procs, nombre) {
+  // Botones guardar nueva sesión
+  document.querySelectorAll(".btn-guardar-sesion").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const procId    = btn.dataset.proc;
+      const procNombre = btn.dataset.procNombre;
+      const paciente  = btn.dataset.paciente;
+      const fecha  = document.querySelector(`.ns_fecha[data-proc="${procId}"]`).value;
+      const hora   = document.querySelector(`.ns_hora[data-proc="${procId}"]`).value;
+      const dur    = document.querySelector(`.ns_dur[data-proc="${procId}"]`).value;
+      const notas  = document.querySelector(`.ns_notas[data-proc="${procId}"]`).value;
+
+      if (!fecha || !hora) { alert("Fecha y hora son obligatorias."); return; }
+
+      await fetch("/sesion/nueva", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre_paciente: paciente,
+          procedimiento_id: parseInt(procId),
+          fecha_sesion: fecha,
+          hora_inicio: hora,
+          duracion_minutos: parseInt(dur) || 60,
+          procedimiento: procNombre,
+          notas: notas
+        })
+      });
+      await cargarModalPaciente(nombre);
+      await actualizar();
+    });
+  });
+
+  // Botones marcar asistencia (dentro del modal paciente)
   document.querySelectorAll(".btn-marcar-asistencia").forEach(btn => {
     btn.addEventListener("click", () => {
       const sesionId = parseInt(btn.dataset.sesionId);
-      const sesion = sesiones.find(s => s.id === sesionId);
+      // Buscar la sesión en todos los procedimientos
+      let sesion = null;
+      for (const proc of procs) {
+        sesion = proc.sesiones.find(s => s.id === sesionId);
+        if (sesion) break;
+      }
       if (!sesion) return;
       sesion.paciente = nombre;
       abrirModalAsistencia(sesion, async () => {
@@ -467,87 +583,15 @@ async function cargarModalPaciente(nombre) {
       });
     });
   });
-
-  // Guardar nueva sesión
-  document.getElementById("btnGuardarSesion").addEventListener("click", async () => {
-    const fecha = document.getElementById("ns_fecha").value;
-    const hora = document.getElementById("ns_hora").value;
-    const duracion = document.getElementById("ns_duracion").value;
-    const proc = document.getElementById("ns_procedimiento").value;
-    const notas = document.getElementById("ns_notas").value;
-
-    if (!fecha || !hora) {
-      alert("Fecha y hora son obligatorias.");
-      return;
-    }
-
-    await fetch("/sesion/nueva", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        nombre_paciente: nombre,
-        fecha_sesion: fecha,
-        hora_inicio: hora,
-        duracion_minutos: parseInt(duracion) || 60,
-        procedimiento: proc,
-        notas: notas
-      })
-    });
-
-    await cargarModalPaciente(nombre);
-    await actualizar();
-  });
-}
-
-function renderSesionesHTML(sesiones, nombrePaciente) {
-  if (!sesiones.length) return `<p style="color:#888;margin:12px 0;">No hay sesiones registradas.</p>`;
-
-  return sesiones.map(s => {
-    let claseAsistencia = "";
-    let badgeAsistencia = "";
-    let btnLabel = "Registrar asistencia";
-
-    if (s.asistencia === "si") {
-      claseAsistencia = "sesion-asistio";
-      badgeAsistencia = `<span class="badge-asistio">✔ Asistió</span>`;
-      btnLabel = "Cambiar registro";
-    } else if (s.asistencia === "no") {
-      claseAsistencia = "sesion-no-asistio";
-      badgeAsistencia = `<span class="badge-no-asistio">✘ No asistió</span>`;
-      btnLabel = "Cambiar registro";
-    }
-
-    const fechaReg = s.fecha_registro
-      ? `<span class="reg-fecha-mini">Registrado: ${s.fecha_registro}</span>`
-      : "";
-
-    return `
-      <div class="sesion-item ${claseAsistencia}">
-        <div class="sesion-item-header">
-          <div>
-            <span class="sesion-fecha-hora">📅 ${s.fecha_sesion} · 🕐 ${s.hora_inicio} · ⏱ ${s.duracion_minutos} min</span>
-            ${s.procedimiento ? `<span class="sesion-proc">💆 ${s.procedimiento}</span>` : ""}
-            ${s.notas ? `<span class="sesion-notas">📝 ${s.notas}</span>` : ""}
-            ${fechaReg}
-          </div>
-          <div class="sesion-item-acciones">
-            ${badgeAsistencia}
-            <button class="btn-marcar-asistencia" data-sesion-id="${s.id}">${btnLabel}</button>
-          </div>
-        </div>
-      </div>
-    `;
-  }).join("");
 }
 
 // ================================================
-// UTILIDADES
+// UTILIDADES FECHA
 // ================================================
 function lunesDe(fecha) {
   const d = new Date(fecha);
   const dow = d.getDay();
-  const diff = dow === 0 ? -6 : 1 - dow;
-  d.setDate(d.getDate() + diff);
+  d.setDate(d.getDate() + (dow === 0 ? -6 : 1 - dow));
   d.setHours(0,0,0,0);
   return d;
 }
@@ -558,15 +602,10 @@ function agregarDias(fecha, n) {
   return d;
 }
 
-function formatoFechaISO(d) {
-  return d.toISOString().split("T")[0];
-}
+function formatoFechaISO(d) { return d.toISOString().split("T")[0]; }
 
 function colorPaciente(nombre) {
-  if (!(nombre in colorMap)) {
-    colorMap[nombre] = colorIdx % 6;
-    colorIdx++;
-  }
+  if (!(nombre in colorMap)) { colorMap[nombre] = colorIdx++ % 6; }
   return colorMap[nombre];
 }
 
@@ -581,22 +620,17 @@ function mostrarNotificacion(msg, tipo) {
   n.className = `notificacion notificacion-${tipo}`;
   n.textContent = msg;
   document.body.appendChild(n);
-  setTimeout(() => n.classList.add("visible"), 50);
-  setTimeout(() => {
-    n.classList.remove("visible");
-    setTimeout(() => n.remove(), 400);
-  }, 4000);
+  setTimeout(() => n.classList.add("visible"), 30);
+  setTimeout(() => { n.classList.remove("visible"); setTimeout(() => n.remove(), 400); }, 4000);
 }
 
 // ================================================
-// RENDER CABECERA DIAS
+// CALENDARIO — RENDER
 // ================================================
 function renderCabecera() {
-  const hoy = new Date();
-  hoy.setHours(0,0,0,0);
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
   const header = document.getElementById("cal-days-header");
   header.innerHTML = '<div></div>';
-
   for (let i = 0; i < 6; i++) {
     const dia = agregarDias(semanaActual, i);
     const esHoy = dia.getTime() === hoy.getTime();
@@ -605,7 +639,6 @@ function renderCabecera() {
     div.innerHTML = `<div class="dow">${DIAS[i]}</div><div class="dom">${dia.getDate()}</div>`;
     header.appendChild(div);
   }
-
   const fin = agregarDias(semanaActual, 5);
   document.getElementById("cal-titulo").textContent =
     `${semanaActual.getDate()} – ${fin.getDate()} de ${MESES[fin.getMonth()]} ${fin.getFullYear()}`;
@@ -613,35 +646,26 @@ function renderCabecera() {
     `Semana del ${MESES[semanaActual.getMonth()]}`;
 }
 
-// ================================================
-// RENDER GRILLA HORARIA
-// ================================================
 function renderGrilla() {
   const grid = document.getElementById("cal-grid");
   grid.innerHTML = "";
-
   for (let h = HORA_INICIO; h < HORA_FIN; h++) {
     const label = document.createElement("div");
     label.className = "cal-time-label";
     label.textContent = h < 12 ? `${h} AM` : h === 12 ? "12 PM" : `${h-12} PM`;
     grid.appendChild(label);
-
     for (let d = 0; d < 6; d++) {
       const cell = document.createElement("div");
       cell.className = "cal-cell";
-      cell.dataset.hora = h;
-      cell.dataset.dia = d;
+      cell.dataset.hora = h; cell.dataset.dia = d;
       grid.appendChild(cell);
     }
   }
 }
 
-// ================================================
-// CARGAR SESIONES Y COLOCAR BLOQUES
-// ================================================
 async function cargarSemana() {
   const iso = formatoFechaISO(semanaActual);
-  const res = await fetch(`/calendario?fecha_inicio=${iso}`);
+  const res  = await fetch(`/calendario?fecha_inicio=${iso}`);
   const data = await res.json();
   sesionesCache = data.sesiones;
   renderBloques();
@@ -649,148 +673,93 @@ async function cargarSemana() {
 
 function renderBloques() {
   document.querySelectorAll(".sesion-bloque").forEach(b => b.remove());
-
   sesionesCache.forEach(s => {
     const [h, m] = s.hora_inicio.split(":").map(Number);
     if (h < HORA_INICIO || h >= HORA_FIN) return;
-
     const filaHora = h - HORA_INICIO;
     const fechaSesion = new Date(s.fecha + "T00:00:00");
     const dow = fechaSesion.getDay();
     const col = dow === 0 ? -1 : dow - 1;
     if (col < 0 || col > 5) return;
-
     const cells = document.querySelectorAll(".cal-cell");
-    const cellIndex = filaHora * 6 + col;
-    if (cellIndex >= cells.length) return;
-    const cell = cells[cellIndex];
+    const cell  = cells[filaHora * 6 + col];
+    if (!cell) return;
 
-    const topPx = (m / 60) * PX_POR_HORA;
+    const topPx  = (m / 60) * PX_POR_HORA;
     const altoPx = Math.max((s.duracion_minutos / 60) * PX_POR_HORA - 4, 20);
 
-    const bloque = document.createElement("div");
-
-    // Color según asistencia
     let claseColor = `color-${colorPaciente(s.paciente)}`;
     if (s.asistencia === "si") claseColor = "color-asistio";
     else if (s.asistencia === "no") claseColor = "color-no-asistio";
 
+    const bloque = document.createElement("div");
     bloque.className = `sesion-bloque ${claseColor}`;
     bloque.style.top = topPx + "px";
     bloque.style.height = altoPx + "px";
     bloque.innerHTML = `
       <div class="sb-nombre">${s.paciente}</div>
       <div class="sb-hora">${s.hora_inicio} · ${s.duracion_minutos} min</div>
-      ${s.procedimiento ? `<div class="sb-proc">${s.procedimiento}</div>` : ''}
-      ${s.asistencia === 'si' ? '<div class="sb-asistencia sb-asistio">✔</div>' : ''}
-      ${s.asistencia === 'no' ? '<div class="sb-asistencia sb-no-asistio">✘</div>' : ''}
+      ${s.procedimiento ? `<div class="sb-proc">${s.procedimiento}</div>` : ""}
+      ${s.asistencia === "si" ? `<div class="sb-asistencia sb-asistio">✔</div>` : ""}
+      ${s.asistencia === "no" ? `<div class="sb-asistencia sb-no-asistio">✘</div>` : ""}
     `;
 
-    bloque.addEventListener("mouseenter", (e) => mostrarPopup(e, s));
-    bloque.addEventListener("mouseleave", () => ocultarPopup());
-
-    // Click en bloque del calendario → abrir modal asistencia
+    bloque.addEventListener("mouseenter", e => mostrarPopup(e, s));
+    bloque.addEventListener("mouseleave", ocultarPopup);
     bloque.addEventListener("click", () => {
       ocultarPopup();
-      abrirModalAsistencia(s, async () => {
-        await actualizar();
-      });
+      abrirModalAsistencia(s, async () => await actualizar());
     });
-
     cell.appendChild(bloque);
   });
-
   renderLineaActual();
 }
 
 function renderLineaActual() {
   document.querySelectorAll(".cal-now-line").forEach(l => l.remove());
   const hoy = new Date();
-  const lunes = lunesDe(hoy);
-  if (formatoFechaISO(lunes) !== formatoFechaISO(semanaActual)) return;
-
-  const h = hoy.getHours();
-  const m = hoy.getMinutes();
+  if (formatoFechaISO(lunesDe(hoy)) !== formatoFechaISO(semanaActual)) return;
+  const h = hoy.getHours(), m = hoy.getMinutes();
   if (h < HORA_INICIO || h >= HORA_FIN) return;
-
   const col = hoy.getDay() - 1;
   if (col < 0 || col > 5) return;
-
-  const filaHora = h - HORA_INICIO;
   const cells = document.querySelectorAll(".cal-cell");
-  const cellIndex = filaHora * 6 + col;
-  if (cellIndex >= cells.length) return;
-  const cell = cells[cellIndex];
-
-  const topPx = (m / 60) * PX_POR_HORA;
+  const cell  = cells[(h - HORA_INICIO) * 6 + col];
+  if (!cell) return;
   const linea = document.createElement("div");
   linea.className = "cal-now-line";
-  linea.style.top = topPx + "px";
+  linea.style.top = ((m / 60) * PX_POR_HORA) + "px";
   linea.innerHTML = '<div class="cal-now-dot"></div>';
   cell.appendChild(linea);
 }
 
-// ================================================
-// POPUP
-// ================================================
 function mostrarPopup(e, s) {
   const pop = document.getElementById("sesion-popup");
   document.getElementById("sp-nombre").textContent = s.paciente;
-  document.getElementById("sp-fecha").textContent = s.fecha;
-  document.getElementById("sp-hora").textContent = s.hora_inicio;
-  document.getElementById("sp-dur").textContent = s.duracion_minutos + " min";
-  document.getElementById("sp-proc").textContent = s.procedimiento || "—";
-  document.getElementById("sp-notas").textContent = s.notas || "—";
-  const estadoEl = document.getElementById("sp-estado");
-  if (s.asistencia === "si") estadoEl.textContent = "✔ Asistió";
-  else if (s.asistencia === "no") estadoEl.textContent = "✘ No asistió";
-  else estadoEl.textContent = "Sin registrar";
-
+  document.getElementById("sp-fecha").textContent  = s.fecha;
+  document.getElementById("sp-hora").textContent   = s.hora_inicio;
+  document.getElementById("sp-dur").textContent    = s.duracion_minutos + " min";
+  document.getElementById("sp-proc").textContent   = s.procedimiento || "—";
+  const est = document.getElementById("sp-estado");
+  est.textContent = s.asistencia === "si" ? "✔ Asistió" : s.asistencia === "no" ? "✘ No asistió" : "Sin registrar";
   pop.style.left = (e.clientX + 16) + "px";
-  pop.style.top = (e.clientY - 20) + "px";
+  pop.style.top  = (e.clientY - 20) + "px";
   pop.classList.add("visible");
 }
 
-function ocultarPopup() {
-  document.getElementById("sesion-popup").classList.remove("visible");
-}
+function ocultarPopup() { document.getElementById("sesion-popup").classList.remove("visible"); }
 
-// ================================================
-// NAVEGACION
-// ================================================
-document.getElementById("btn-ant").addEventListener("click", () => {
-  semanaActual = agregarDias(semanaActual, -7);
-  actualizar();
-});
+// Navegación
+document.getElementById("btn-ant").addEventListener("click", () => { semanaActual = agregarDias(semanaActual,-7); actualizar(); });
+document.getElementById("btn-sig").addEventListener("click", () => { semanaActual = agregarDias(semanaActual, 7); actualizar(); });
+document.getElementById("btn-hoy").addEventListener("click", () => { semanaActual = lunesDe(new Date()); actualizar(); });
 
-document.getElementById("btn-sig").addEventListener("click", () => {
-  semanaActual = agregarDias(semanaActual, 7);
-  actualizar();
-});
+function actualizar() { renderCabecera(); renderGrilla(); cargarSemana(); }
 
-document.getElementById("btn-hoy").addEventListener("click", () => {
-  semanaActual = lunesDe(new Date());
-  actualizar();
-});
-
-function actualizar() {
-  renderCabecera();
-  renderGrilla();
-  cargarSemana();
-}
-
-function scrollAlInicio() {
-  const grid = document.getElementById("cal-grid");
-  grid.scrollTop = 0;
-}
-
-// ================================================
 // INIT
-// ================================================
 actualizar();
-setTimeout(scrollAlInicio, 100);
+setTimeout(() => { document.getElementById("cal-grid").scrollTop = 0; }, 100);
 setInterval(renderLineaActual, 60000);
 </script>
-
 </body>
 </html>
