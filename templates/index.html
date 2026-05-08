@@ -15,6 +15,7 @@
     <div id="resultados"></div>
   </div>
   <button class="btn-registros" id="btnRegistros">📋 Registros</button>
+  <button class="btn-registros" id="btnPagos">💰 Pagos</button>
 </div>
 
 <!-- CALENDARIO -->
@@ -57,6 +58,22 @@
   <div class="modal-content modal-registros-content">
     <span class="closeBtn" id="closeBtnRegistros">✖</span>
     <div id="registrosBody"></div>
+  </div>
+</div>
+
+<!-- MODAL PAGOS GLOBAL -->
+<div id="modalPagos" class="modal hidden">
+  <div class="modal-content modal-registros-content">
+    <span class="closeBtn" id="closeBtnPagos">✖</span>
+    <div id="pagosBody"></div>
+  </div>
+</div>
+
+<!-- MODAL PAGO SESION -->
+<div id="modalPagoSesion" class="modal hidden">
+  <div class="modal-content modal-asistencia-content">
+    <span class="closeBtn" id="closeBtnPagoSesion">✖</span>
+    <div id="pagoSesionBody"></div>
   </div>
 </div>
 
@@ -244,7 +261,171 @@ async function abrirModalRegistros() {
 }
 
 // ================================================
-// BARRA DE BUSQUEDA
+// MODAL PAGOS GLOBAL
+// ================================================
+const modalPagos     = document.getElementById("modalPagos");
+const pagosBody      = document.getElementById("pagosBody");
+const closeBtnPagos  = document.getElementById("closeBtnPagos");
+
+function cerrarModalPagos() { modalPagos.classList.add("hidden"); pagosBody.innerHTML = ""; }
+closeBtnPagos.addEventListener("click", cerrarModalPagos);
+modalPagos.addEventListener("click", e => { if (e.target === modalPagos) cerrarModalPagos(); });
+document.getElementById("btnPagos").addEventListener("click", abrirModalPagos);
+
+async function abrirModalPagos() {
+  modalPagos.classList.remove("hidden");
+  pagosBody.innerHTML = `<div class="loading-registros">⏳ Cargando pagos...</div>`;
+
+  const res  = await fetch("/pagos");
+  const data = await res.json();
+  const pagos = data.pagos || [];
+
+  if (!pagos.length) {
+    pagosBody.innerHTML = `<h2 style="margin-bottom:16px">💰 Registro de pagos</h2>
+      <p style="color:#888">No hay pagos registrados aún.</p>`;
+    return;
+  }
+
+  const totalPrecio  = pagos.reduce((a,p) => a + (p.precio_sesion||0), 0);
+  const totalCobrado = pagos.reduce((a,p) => a + (p.monto_pagado||0), 0);
+  const totalDeuda   = pagos.reduce((a,p) => a + (p.deuda_sesion||0), 0);
+
+  const grupos = {};
+  pagos.forEach(p => {
+    const dia = p.fecha_pago ? p.fecha_pago.split(" ")[0] : "Sin fecha";
+    if (!grupos[dia]) grupos[dia] = [];
+    grupos[dia].push(p);
+  });
+
+  let html = `
+    <div class="registros-header-row">
+      <h2>💰 Registro de pagos</h2>
+    </div>
+    <div class="pagos-resumen-global">
+      <div class="pago-stat"><span class="pago-stat-label">Total facturado</span><span class="pago-stat-val">S/ ${totalPrecio.toFixed(2)}</span></div>
+      <div class="pago-stat"><span class="pago-stat-label">Total cobrado</span><span class="pago-stat-val pago-cobrado">S/ ${totalCobrado.toFixed(2)}</span></div>
+      <div class="pago-stat"><span class="pago-stat-label">Deuda pendiente</span><span class="pago-stat-val pago-deuda">S/ ${totalDeuda.toFixed(2)}</span></div>
+    </div>`;
+
+  Object.entries(grupos).forEach(([dia, items]) => {
+    const diaDeuda = items.reduce((a,p) => a + (p.deuda_sesion||0), 0);
+    html += `<div class="reg-grupo-fecha">📅 ${formatearFechaLarga(dia)}${diaDeuda > 0 ? ` <span class="pago-deuda-dia">· Deuda del día: S/ ${diaDeuda.toFixed(2)}</span>` : ''}</div>`;
+    items.forEach(p => {
+      const estadoPago = p.pagado === "si" ? "pago-completo" : p.pagado === "parcial" ? "pago-parcial" : "pago-pendiente";
+      const labelPago  = p.pagado === "si" ? "✔ Pagado" : p.pagado === "parcial" ? "⚡ Parcial" : "✘ Sin pagar";
+      const horaReg = p.fecha_pago ? p.fecha_pago.split(" ")[1].slice(0,5) : "";
+      html += `
+        <div class="reg-item pago-item ${estadoPago}">
+          <div class="reg-item-header">
+            <span class="reg-paciente">${p.paciente}</span>
+            <span class="reg-hora-reg">${horaReg}</span>
+          </div>
+          <div class="reg-item-info">
+            <span>📅 ${p.fecha_sesion} · 🕐 ${p.hora_inicio}</span>
+            ${p.procedimiento ? `<span class="reg-proc-badge">💆 ${p.procedimiento}</span>` : ""}
+            <span class="pago-badge ${estadoPago}">${labelPago}</span>
+          </div>
+          <div class="pago-montos">
+            <span>Precio: <b>S/ ${(p.precio_sesion||0).toFixed(2)}</b></span>
+            <span>Pagado: <b style="color:#137333">S/ ${(p.monto_pagado||0).toFixed(2)}</b></span>
+            ${p.deuda_sesion > 0 ? `<span>Debe: <b style="color:#a50e0e">S/ ${p.deuda_sesion.toFixed(2)}</b></span>` : ""}
+          </div>
+        </div>`;
+    });
+  });
+
+  pagosBody.innerHTML = html;
+}
+
+// ================================================
+// MODAL PAGO SESION
+// ================================================
+const modalPagoSesion    = document.getElementById("modalPagoSesion");
+const pagoSesionBody     = document.getElementById("pagoSesionBody");
+const closeBtnPagoSesion = document.getElementById("closeBtnPagoSesion");
+let pagoSesionCallback   = null;
+
+function cerrarModalPagoSesion() {
+  modalPagoSesion.classList.add("hidden");
+  pagoSesionBody.innerHTML = "";
+  pagoSesionCallback = null;
+}
+closeBtnPagoSesion.addEventListener("click", cerrarModalPagoSesion);
+modalPagoSesion.addEventListener("click", e => { if (e.target === modalPagoSesion) cerrarModalPagoSesion(); });
+
+function abrirModalPagoSesion(sesion, onDone) {
+  pagoSesionCallback = onDone;
+  const precio     = sesion.precio_sesion != null ? sesion.precio_sesion : "";
+  const pagadoMonto = sesion.monto_pagado || 0;
+  const estadoPago = sesion.pagado || "no";
+  const labelEstado = estadoPago === "si" ? `<span style="color:#137333;font-weight:600">✔ Pagado completo</span>`
+                    : estadoPago === "parcial" ? `<span style="color:#e67e00;font-weight:600">⚡ Pago parcial</span>`
+                    : `<span style="color:#a50e0e;font-weight:600">✘ Sin pagar</span>`;
+
+  pagoSesionBody.innerHTML = `
+    <div class="asistencia-header">
+      <div class="asistencia-icon">💰</div>
+      <h2>Registrar pago</h2>
+      <p class="asistencia-sub">Sesión del <b>${sesion.fecha_sesion}</b> · ${sesion.hora_inicio}</p>
+    </div>
+    ${estadoPago !== "no" ? `<div class="asistencia-estado-actual">Estado actual: ${labelEstado}</div>` : ""}
+    <div class="pago-form">
+      <div class="pago-form-row">
+        <label>Precio de la sesión (S/)</label>
+        <input type="number" min="0" step="0.01" id="inp_precio" placeholder="Ej: 80.00" value="${precio}"
+          style="width:100%;padding:12px 14px;border:1px solid #d8d8d8;border-radius:12px;outline:none;font:inherit;font-size:18px;text-align:right">
+      </div>
+      <div class="pago-form-row">
+        <label>Monto pagado (S/)</label>
+        <input type="number" min="0" step="0.01" id="inp_pagado" placeholder="Ej: 50.00" value="${pagadoMonto > 0 ? pagadoMonto : ""}"
+          style="width:100%;padding:12px 14px;border:1px solid #d8d8d8;border-radius:12px;outline:none;font:inherit;font-size:18px;text-align:right">
+      </div>
+      <div id="pago_preview" style="font-size:13px;margin-top:6px;text-align:right;font-weight:600"></div>
+    </div>
+    <div class="asistencia-botones" style="margin-top:16px">
+      <button class="btn-asistio" id="btnGuardarPago" style="flex:1">
+        <span class="btn-icon">💾</span><span>Guardar pago</span>
+      </button>
+    </div>
+  `;
+  modalPagoSesion.classList.remove("hidden");
+
+  const inpPrecio = document.getElementById("inp_precio");
+  const inpPagado = document.getElementById("inp_pagado");
+  const preview   = document.getElementById("pago_preview");
+
+  function actualizarPreview() {
+    const p = parseFloat(inpPrecio.value) || 0;
+    const g = parseFloat(inpPagado.value) || 0;
+    if (p > 0) {
+      const debe = Math.max(0, p - g);
+      preview.textContent = debe > 0 ? `Pendiente: S/ ${debe.toFixed(2)}` : "✔ Cubierto al 100%";
+      preview.style.color = debe > 0 ? "#a50e0e" : "#137333";
+    } else { preview.textContent = ""; }
+  }
+  inpPrecio.addEventListener("input", actualizarPreview);
+  inpPagado.addEventListener("input", actualizarPreview);
+  actualizarPreview();
+
+  document.getElementById("btnGuardarPago").onclick = async () => {
+    const precio_val = parseFloat(inpPrecio.value) || null;
+    const pagado_val = parseFloat(inpPagado.value) || 0;
+    const res = await fetch(`/sesion/pago/${sesion.id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ precio_sesion: precio_val, monto_pagado: pagado_val })
+    });
+    const r = await res.json();
+    cerrarModalPagoSesion();
+    mostrarNotificacion(
+      `💰 Pago guardado. Deuda total del paciente: S/ ${r.deuda_total.toFixed(2)}`,
+      r.deuda_total > 0 ? "" : "success"
+    );
+    if (pagoSesionCallback) pagoSesionCallback();
+  };
+}
+
+// ================================================
 // ================================================
 const input     = document.getElementById("search");
 const resultados = document.getElementById("resultados");
@@ -390,6 +571,9 @@ async function cargarModalPaciente(nombre) {
       <p><b>Diabetes:</b> ${p.tiene_diabetes || "—"}</p>
       <p><b>Hipertensión:</b> ${p.tiene_hipertension || "—"}</p>
       <p><b>Antecedentes:</b> ${p.antecedentes || "—"}</p>
+      <p class="${(p.deuda_total||0) > 0 ? 'dato-deuda-alerta' : 'dato-deuda-ok'}">
+        <b>💰 Deuda total:</b> S/ ${(p.deuda_total||0).toFixed(2)}
+      </p>
     </div>
 
     <div id="seccionProcedimientos">
@@ -517,6 +701,17 @@ function renderSesionItem(s) {
   const fechaReg = s.fecha_registro
     ? `<span class="reg-fecha-mini">Registrado: ${s.fecha_registro}</span>` : "";
 
+  // Info de pago
+  let pagoBadge = "";
+  let pagoInfo  = "";
+  if (s.precio_sesion != null) {
+    const estadoPago = s.pagado === "si" ? "pago-completo" : s.pagado === "parcial" ? "pago-parcial" : "pago-pendiente";
+    const labelPago  = s.pagado === "si" ? "✔ Pagado" : s.pagado === "parcial" ? "⚡ Parcial" : "✘ Sin pagar";
+    pagoBadge = `<span class="pago-badge-mini ${estadoPago}">${labelPago}</span>`;
+    const debe = Math.max(0, (s.precio_sesion||0) - (s.monto_pagado||0));
+    pagoInfo = `<span class="sesion-pago-info">S/ ${(s.precio_sesion||0).toFixed(2)}${debe > 0 ? ` · Debe S/ ${debe.toFixed(2)}` : ""}</span>`;
+  }
+
   return `
     <div class="sesion-item ${cls}">
       <div class="sesion-item-header">
@@ -524,10 +719,13 @@ function renderSesionItem(s) {
           <span class="sesion-fecha-hora">📅 ${s.fecha_sesion} · 🕐 ${s.hora_inicio} · ⏱ ${s.duracion_minutos} min</span>
           ${s.notas ? `<span class="sesion-notas">📝 ${s.notas}</span>` : ""}
           ${fechaReg}
+          ${pagoInfo}
         </div>
         <div class="sesion-item-acciones">
           ${badge}
+          ${pagoBadge}
           <button class="btn-marcar-asistencia" data-sesion-id="${s.id}">${btnLbl}</button>
+          <button class="btn-pago-sesion" data-sesion-id="${s.id}" title="Registrar pago">💰</button>
         </div>
       </div>
     </div>`;
@@ -569,7 +767,6 @@ function adjuntarEventosSesiones(procs, nombre) {
   document.querySelectorAll(".btn-marcar-asistencia").forEach(btn => {
     btn.addEventListener("click", () => {
       const sesionId = parseInt(btn.dataset.sesionId);
-      // Buscar la sesión en todos los procedimientos
       let sesion = null;
       for (const proc of procs) {
         sesion = proc.sesiones.find(s => s.id === sesionId);
@@ -578,6 +775,23 @@ function adjuntarEventosSesiones(procs, nombre) {
       if (!sesion) return;
       sesion.paciente = nombre;
       abrirModalAsistencia(sesion, async () => {
+        await cargarModalPaciente(nombre);
+        await actualizar();
+      });
+    });
+  });
+
+  // Botones de pago por sesión
+  document.querySelectorAll(".btn-pago-sesion").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const sesionId = parseInt(btn.dataset.sesionId);
+      let sesion = null;
+      for (const proc of procs) {
+        sesion = proc.sesiones.find(s => s.id === sesionId);
+        if (sesion) break;
+      }
+      if (!sesion) return;
+      abrirModalPagoSesion(sesion, async () => {
         await cargarModalPaciente(nombre);
         await actualizar();
       });

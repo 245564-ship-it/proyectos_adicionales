@@ -64,6 +64,11 @@ for sql in [
     "ALTER TABLE sesiones ADD COLUMN procedimiento_id INTEGER",
     "ALTER TABLE productos ADD COLUMN procedimiento TEXT",
     "ALTER TABLE productos ADD COLUMN nro_sesiones INTEGER",
+    # Columnas de pago
+    "ALTER TABLE sesiones ADD COLUMN precio_sesion REAL DEFAULT NULL",
+    "ALTER TABLE sesiones ADD COLUMN monto_pagado REAL DEFAULT 0",
+    "ALTER TABLE sesiones ADD COLUMN pagado TEXT DEFAULT 'no'",
+    "ALTER TABLE sesiones ADD COLUMN fecha_pago TEXT DEFAULT NULL",
 ]:
     try:
         cursor.execute(sql)
@@ -278,7 +283,8 @@ def obtener_paciente(nombre: str):
 
         cursor.execute("""
             SELECT id, fecha_sesion, hora_inicio, duracion_minutos, procedimiento,
-                   notas, estado, asistencia, fecha_registro
+                   notas, estado, asistencia, fecha_registro,
+                   precio_sesion, monto_pagado, pagado, fecha_pago
             FROM sesiones WHERE nombre_paciente=? AND procedimiento_id=?
             ORDER BY fecha_sesion, hora_inicio
         """, (nombre, pid))
@@ -288,7 +294,11 @@ def obtener_paciente(nombre: str):
                 "id": s[0], "fecha_sesion": s[1], "hora_inicio": s[2],
                 "duracion_minutos": s[3], "procedimiento": s[4] or pnombre,
                 "notas": s[5] or "", "estado": s[6],
-                "asistencia": s[7], "fecha_registro": s[8] or ""
+                "asistencia": s[7], "fecha_registro": s[8] or "",
+                "precio_sesion": s[9],
+                "monto_pagado": s[10] or 0,
+                "pagado": s[11] or "no",
+                "fecha_pago": s[12] or ""
             })
 
         procedimientos_out.append({
@@ -301,7 +311,77 @@ def obtener_paciente(nombre: str):
             "sesiones": sesiones_list
         })
 
+    # Calcular deuda total del paciente (precio - pagado en sesiones con precio definido)
+    cursor.execute("""
+        SELECT COALESCE(SUM(COALESCE(precio_sesion,0) - COALESCE(monto_pagado,0)), 0)
+        FROM sesiones WHERE nombre_paciente=? AND precio_sesion IS NOT NULL AND precio_sesion > 0
+    """, (nombre,))
+    deuda_total = max(0, cursor.fetchone()[0])
+    paciente["deuda_total"] = round(deuda_total, 2)
+
     return {"paciente": paciente, "procedimientos": procedimientos_out}
+
+@app.post("/sesion/pago/{sesion_id}")
+def registrar_pago(sesion_id: int, data: dict):
+    """Registra o actualiza precio y pago de una sesión."""
+    precio = data.get("precio_sesion")
+    monto_pagado = float(data.get("monto_pagado", 0) or 0)
+    fecha_pago = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    if precio is not None:
+        precio = float(precio)
+        pagado = "si" if monto_pagado >= precio else ("parcial" if monto_pagado > 0 else "no")
+    else:
+        pagado = "no"
+
+    cursor.execute("""
+        UPDATE sesiones SET precio_sesion=?, monto_pagado=?, pagado=?, fecha_pago=? WHERE id=?
+    """, (precio, monto_pagado, pagado, fecha_pago, sesion_id))
+    conexion.commit()
+
+    # Recalcular deuda total del paciente
+    cursor.execute("SELECT nombre_paciente FROM sesiones WHERE id=?", (sesion_id,))
+    row = cursor.fetchone()
+    deuda_total = 0
+    if row:
+        nombre = row[0]
+        cursor.execute("""
+            SELECT COALESCE(SUM(COALESCE(precio_sesion,0) - COALESCE(monto_pagado,0)), 0)
+            FROM sesiones WHERE nombre_paciente=? AND precio_sesion IS NOT NULL AND precio_sesion > 0
+        """, (nombre,))
+        deuda_total = max(0, cursor.fetchone()[0])
+
+    return {"ok": True, "pagado": pagado, "deuda_total": round(deuda_total, 2)}
+
+@app.get("/pagos")
+def obtener_pagos():
+    """Devuelve todos los registros de pago ordenados por fecha de pago."""
+    cursor.execute("""
+        SELECT s.id, s.nombre_paciente, s.fecha_sesion, s.hora_inicio,
+               s.procedimiento, pr.nombre_procedimiento,
+               s.precio_sesion, s.monto_pagado, s.pagado, s.fecha_pago,
+               s.asistencia
+        FROM sesiones s
+        LEFT JOIN procedimientos pr ON pr.id = s.procedimiento_id
+        WHERE s.fecha_pago IS NOT NULL
+        ORDER BY s.fecha_pago DESC
+    """)
+    pagos = []
+    for f in cursor.fetchall():
+        precio = f[6] or 0
+        pagado_monto = f[7] or 0
+        pagos.append({
+            "id": f[0], "paciente": f[1], "fecha_sesion": f[2],
+            "hora_inicio": f[3],
+            "procedimiento": f[5] or f[4] or "",
+            "precio_sesion": precio,
+            "monto_pagado": pagado_monto,
+            "deuda_sesion": max(0, precio - pagado_monto),
+            "pagado": f[8] or "no",
+            "fecha_pago": f[9],
+            "asistencia": f[10]
+        })
+    return {"pagos": pagos}
 
 @app.post("/crear_paciente")
 def crear_paciente(data: dict):

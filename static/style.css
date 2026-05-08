@@ -926,3 +926,111 @@ body {
 
 .notificacion-success { background: #137333; }
 .notificacion-error   { background: #a50e0e; }
+
+/* ========================
+   ESTILOS DE PAGO
+======================== */
+.btn-pago-sesion {
+    background: #fef7e0;
+    border: 1px solid #fbbc04;
+    border-radius: 10px;
+    padding: 6px 10px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.15s;
+    line-height: 1;
+}
+.btn-pago-sesion:hover { background: #fce8a0; }
+
+/* Badge de pago en sesion-item */
+.pago-badge-mini {
+    border-radius: 10px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.pago-completo  { background: #e6f4ea; color: #137333; }
+.pago-parcial   { background: #fef7e0; color: #7b5f00; }
+.pago-pendiente { background: #fce8e6; color: #a50e0e; }
+
+/* Info de precio/deuda en línea dentro de sesion-item */
+.sesion-pago-info {
+    display: block;
+    font-size: 12px;
+    color: #888;
+    margin-top: 3px;
+}
+
+/* Deuda total en datos del paciente */
+.dato-deuda-alerta {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 10px;
+    padding: 8px 12px !important;
+    color: #856404 !important;
+    font-weight: 600;
+    grid-column: 1 / -1;
+}
+.dato-deuda-ok {
+    color: #137333 !important;
+    font-weight: 600;
+}
+
+/* Formulario de pago */
+.pago-form { margin: 16px 0; text-align: left; }
+.pago-form-row { margin-bottom: 12px; }
+.pago-form-row label {
+    display: block;
+    font-size: 13px;
+    color: #888;
+    margin-bottom: 6px;
+    font-weight: 500;
+}
+
+/* Resumen global en modal pagos */
+.pagos-resumen-global {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+.pago-stat {
+    flex: 1;
+    min-width: 120px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 14px 16px;
+    text-align: center;
+}
+.pago-stat-label { display: block; font-size: 12px; color: #888; margin-bottom: 6px; }
+.pago-stat-val   { display: block; font-size: 20px; font-weight: 700; color: #202124; }
+.pago-cobrado    { color: #137333; }
+.pago-deuda      { color: #a50e0e; }
+
+/* Items en modal pagos */
+.pago-item.pago-completo  { background: #f0faf3; border-color: #a8d5b5; }
+.pago-item.pago-parcial   { background: #fffbea; border-color: #f5d97c; }
+.pago-item.pago-pendiente { background: #fff5f5; border-color: #f5b8b8; }
+
+.pago-badge {
+    font-weight: 600;
+    font-size: 13px;
+    padding: 2px 8px;
+    border-radius: 8px;
+}
+
+.pago-montos {
+    display: flex;
+    gap: 14px;
+    font-size: 13px;
+    color: #555;
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+
+.pago-deuda-dia {
+    font-size: 12px;
+    color: #a50e0e;
+    font-weight: 500;
+}
