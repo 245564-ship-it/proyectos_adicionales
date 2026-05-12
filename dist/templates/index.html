@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Agenda</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- BARRA DE BUSQUEDA -->
+<div class="search-wrapper">
+  <div class="container">
+    <input type="text" id="search" placeholder="Buscar paciente..." autocomplete="off">
+    <div id="resultados"></div>
+  </div>
+  <button class="btn-registros" id="btnRegistros">📋 Registros</button>
+  <button class="btn-registros" id="btnPagos">💰 Pagos</button>
+</div>
+
+<!-- CALENDARIO -->
+<div class="calendario-layout">
+  <div class="cal-card">
+    <div class="cal-header">
+      <div>
+        <div class="cal-header-title" id="cal-titulo">Semana</div>
+        <div class="cal-header-sub" id="cal-subtitulo"></div>
+      </div>
+      <div class="cal-nav">
+        <button class="cal-btn" id="btn-ant">&#8249;</button>
+        <button class="cal-btn cal-btn-hoy" id="btn-hoy">Hoy</button>
+        <button class="cal-btn" id="btn-sig">&#8250;</button>
+      </div>
+    </div>
+    <div class="cal-days-header" id="cal-days-header"><div></div></div>
+    <div class="cal-grid" id="cal-grid"></div>
+  </div>
+</div>
+
+<!-- MODAL PACIENTE / CREAR -->
+<div id="modal" class="modal hidden">
+  <div class="modal-content">
+    <span class="closeBtn" id="closeBtn">✖</span>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<!-- MODAL ASISTENCIA -->
+<div id="modalAsistencia" class="modal hidden">
+  <div class="modal-content modal-asistencia-content">
+    <span class="closeBtn" id="closeBtnAsistencia">✖</span>
+    <div id="asistenciaBody"></div>
+  </div>
+</div>
+
+<!-- MODAL REGISTROS -->
+<div id="modalRegistros" class="modal hidden">
+  <div class="modal-content modal-registros-content">
+    <span class="closeBtn" id="closeBtnRegistros">✖</span>
+    <div id="registrosBody"></div>
+  </div>
+</div>
+
+<!-- MODAL PAGOS GLOBAL -->
+<div id="modalPagos" class="modal hidden">
+  <div class="modal-content modal-registros-content">
+    <span class="closeBtn" id="closeBtnPagos">✖</span>
+    <div id="pagosBody"></div>
+  </div>
+</div>
+
+<!-- MODAL PAGO SESION -->
+<div id="modalPagoSesion" class="modal hidden">
+  <div class="modal-content modal-asistencia-content">
+    <span class="closeBtn" id="closeBtnPagoSesion">✖</span>
+    <div id="pagoSesionBody"></div>
+  </div>
+</div>
+
+<!-- Popup hover -->
+<div class="sesion-popup" id="sesion-popup">
+  <div class="sp-nombre" id="sp-nombre"></div>
+  <div class="sp-row"><span class="sp-label">Fecha</span><span id="sp-fecha"></span></div>
+  <div class="sp-row"><span class="sp-label">Hora</span><span id="sp-hora"></span></div>
+  <div class="sp-row"><span class="sp-label">Duración</span><span id="sp-dur"></span></div>
+  <div class="sp-row"><span class="sp-label">Procedimiento</span><span id="sp-proc"></span></div>
+  <div class="sp-row"><span class="sp-label">Estado</span><span id="sp-estado"></span></div>
+</div>
+
+<script>
+// ================================================
+// CONFIG
+// ================================================
+const HORA_INICIO = 9, HORA_FIN = 21, PX_POR_HORA = 60;
+const DIAS  = ["Lun","Mar","Mié","Jue","Vie","Sáb"];
+const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio",
+               "agosto","septiembre","octubre","noviembre","diciembre"];
+
+let semanaActual = lunesDe(new Date());
+let sesionesCache = [];
+const colorMap = {};
+let colorIdx = 0;
+
+// ================================================
+// MODAL PRINCIPAL
+// ================================================
+const modal     = document.getElementById("modal");
+const modalBody = document.getElementById("modalBody");
+const closeBtn  = document.getElementById("closeBtn");
+
+function cerrarModal() { modal.classList.add("hidden"); modalBody.innerHTML = ""; }
+closeBtn.addEventListener("click", cerrarModal);
+modal.addEventListener("click", e => { if (e.target === modal) cerrarModal(); });
+
+// ================================================
+// MODAL ASISTENCIA
+// ================================================
+const modalAsistencia  = document.getElementById("modalAsistencia");
+const asistenciaBody   = document.getElementById("asistenciaBody");
+const closeBtnAsist    = document.getElementById("closeBtnAsistencia");
+let asistenciaCallback = null;
+
+function cerrarModalAsistencia() {
+  modalAsistencia.classList.add("hidden");
+  asistenciaBody.innerHTML = "";
+  asistenciaCallback = null;
+}
+closeBtnAsist.addEventListener("click", cerrarModalAsistencia);
+modalAsistencia.addEventListener("click", e => { if (e.target === modalAsistencia) cerrarModalAsistencia(); });
+
+function abrirModalAsistencia(sesion, onDone) {
+  asistenciaCallback = onDone;
+  const nombrePaciente = sesion.paciente || sesion.nombre_paciente || "";
+  const estadoActual = sesion.asistencia === "si"
+    ? `<span style="color:#137333;font-weight:600;">✔ Asistió</span>`
+    : sesion.asistencia === "no"
+      ? `<span style="color:#a50e0e;font-weight:600;">✘ No asistió</span>`
+      : `<span style="color:#888;">Sin registrar</span>`;
+
+  asistenciaBody.innerHTML = `
+    <div class="asistencia-header">
+      <div class="asistencia-icon">📋</div>
+      <h2>Registrar asistencia</h2>
+      <p class="asistencia-sub">Sesión de <b style="text-transform:capitalize">${nombrePaciente}</b></p>
+    </div>
+    <div class="asistencia-info">
+      <span>📅 ${sesion.fecha || sesion.fecha_sesion}</span>
+      <span>🕐 ${sesion.hora_inicio}</span>
+      <span>⏱ ${sesion.duracion_minutos} min</span>
+      ${sesion.procedimiento ? `<span>💆 ${sesion.procedimiento}</span>` : ""}
+    </div>
+    ${sesion.asistencia ? `<div class="asistencia-estado-actual">Estado actual: ${estadoActual}</div>` : ""}
+    <div class="asistencia-botones">
+      <button class="btn-asistio" id="btnAsistio"><span class="btn-icon">✔</span><span>Sí asistió</span></button>
+      <button class="btn-no-asistio" id="btnNoAsistio"><span class="btn-icon">✘</span><span>No asistió</span></button>
+    </div>
+  `;
+  modalAsistencia.classList.remove("hidden");
+
+  document.getElementById("btnAsistio").onclick = async () => {
+    const r = await registrarAsistencia(sesion.id, "si");
+    cerrarModalAsistencia();
+    if (r.procedimiento_completado)
+      setTimeout(() => mostrarNotificacion("🎉 ¡Procedimiento completado! El paciente cumplió todas sus sesiones.", "success"), 200);
+    if (asistenciaCallback) asistenciaCallback();
+  };
+  document.getElementById("btnNoAsistio").onclick = async () => {
+    await registrarAsistencia(sesion.id, "no");
+    cerrarModalAsistencia();
+    if (asistenciaCallback) asistenciaCallback();
+  };
+}
+
+async function registrarAsistencia(sesionId, asistencia) {
+  const res = await fetch(`/sesion/marcar_asistencia/${sesionId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ asistencia })
+  });
+  return await res.json();
+}
+
+// ================================================
+// MODAL REGISTROS
+// ================================================
+const modalRegistros   = document.getElementById("modalRegistros");
+const registrosBody    = document.getElementById("registrosBody");
+const closeBtnRegistros = document.getElementById("closeBtnRegistros");
+
+function cerrarModalRegistros() {
+  modalRegistros.classList.add("hidden");
+  registrosBody.innerHTML = "";
+}
+closeBtnRegistros.addEventListener("click", cerrarModalRegistros);
+modalRegistros.addEventListener("click", e => { if (e.target === modalRegistros) cerrarModalRegistros(); });
+document.getElementById("btnRegistros").addEventListener("click", abrirModalRegistros);
+
+async function abrirModalRegistros() {
+  modalRegistros.classList.remove("hidden");
+  registrosBody.innerHTML = `<div class="loading-registros">⏳ Cargando registros...</div>`;
+
+  const res  = await fetch("/registros");
+  const data = await res.json();
+  const registros = data.registros || [];
+
+  if (!registros.length) {
+    registrosBody.innerHTML = `<h2 style="margin-bottom:16px">📋 Registros de sesiones</h2>
+      <p style="color:#888">No hay registros aún. Los registros aparecen cuando marcas la asistencia de una sesión.</p>`;
+    return;
+  }
+
+  // Agrupar por día de registro
+  const grupos = {};
+  registros.forEach(r => {
+    const dia = r.fecha_registro ? r.fecha_registro.split(" ")[0] : "Sin fecha";
+    if (!grupos[dia]) grupos[dia] = [];
+    grupos[dia].push(r);
+  });
+
+  const totalAsistio  = registros.filter(r => r.asistencia === "si").length;
+  const totalNoAsistio = registros.filter(r => r.asistencia === "no").length;
+
+  let html = `
+    <div class="registros-header-row">
+      <h2>📋 Registros de sesiones</h2>
+      <span class="reg-resumen">
+        Total: ${registros.length} &nbsp;·&nbsp;
+        <span style="color:#137333">✔ ${totalAsistio} asistieron</span> &nbsp;·&nbsp;
+        <span style="color:#a50e0e">✘ ${totalNoAsistio} no asistieron</span>
+      </span>
+    </div>`;
+
+  Object.entries(grupos).forEach(([dia, items]) => {
+    html += `<div class="reg-grupo-fecha">📅 ${formatearFechaLarga(dia)}</div>`;
+    items.forEach(r => {
+      const cls   = r.asistencia === "si" ? "reg-asistio" : r.asistencia === "no" ? "reg-no-asistio" : "";
+      const label = r.asistencia === "si" ? "✔ Asistió" : r.asistencia === "no" ? "✘ No asistió" : "— Sin registrar";
+      const horaReg = r.fecha_registro ? r.fecha_registro.split(" ")[1].slice(0, 5) : "";
+      const prog = r.nro_sesiones_programadas > 0
+        ? `${r.sesiones_asistidas}/${r.nro_sesiones_programadas} sesiones`
+        : `${r.sesiones_asistidas} asistidas`;
+
+      html += `
+        <div class="reg-item ${cls}">
+          <div class="reg-item-header">
+            <span class="reg-paciente">${r.paciente}</span>
+            <span class="reg-hora-reg">Registrado a las ${horaReg}</span>
+          </div>
+          <div class="reg-item-info">
+            <span>📅 ${r.fecha_sesion} · 🕐 ${r.hora_inicio} · ⏱ ${r.duracion_minutos} min</span>
+            ${r.procedimiento ? `<span class="reg-proc-badge">💆 ${r.procedimiento}</span>` : ""}
+            <span class="reg-asistencia-badge">${label}</span>
+            <span class="reg-progreso">${prog}</span>
+          </div>
+          ${r.notas ? `<div class="reg-notas">📝 ${r.notas}</div>` : ""}
+        </div>`;
+    });
+  });
+
+  registrosBody.innerHTML = html;
+}
+
+// ================================================
+// MODAL PAGOS GLOBAL
+// ================================================
+const modalPagos     = document.getElementById("modalPagos");
+const pagosBody      = document.getElementById("pagosBody");
+const closeBtnPagos  = document.getElementById("closeBtnPagos");
+
+function cerrarModalPagos() { modalPagos.classList.add("hidden"); pagosBody.innerHTML = ""; }
+closeBtnPagos.addEventListener("click", cerrarModalPagos);
+modalPagos.addEventListener("click", e => { if (e.target === modalPagos) cerrarModalPagos(); });
+document.getElementById("btnPagos").addEventListener("click", abrirModalPagos);
+
+async function abrirModalPagos() {
+  modalPagos.classList.remove("hidden");
+  pagosBody.innerHTML = `<div class="loading-registros">⏳ Cargando pagos...</div>`;
+
+  const res  = await fetch("/pagos");
+  const data = await res.json();
+  const pagos = data.pagos || [];
+
+  if (!pagos.length) {
+    pagosBody.innerHTML = `<h2 style="margin-bottom:16px">💰 Registro de pagos</h2>
+      <p style="color:#888">No hay pagos registrados aún.</p>`;
+    return;
+  }
+
+  const totalPrecio  = pagos.reduce((a,p) => a + (p.precio_sesion||0), 0);
+  const totalCobrado = pagos.reduce((a,p) => a + (p.monto_pagado||0), 0);
+  const totalDeuda   = pagos.reduce((a,p) => a + (p.deuda_sesion||0), 0);
+
+  const grupos = {};
+  pagos.forEach(p => {
+    const dia = p.fecha_pago ? p.fecha_pago.split(" ")[0] : "Sin fecha";
+    if (!grupos[dia]) grupos[dia] = [];
+    grupos[dia].push(p);
+  });
+
+  let html = `
+    <div class="registros-header-row">
+      <h2>💰 Registro de pagos</h2>
+    </div>
+    <div class="pagos-resumen-global">
+      <div class="pago-stat"><span class="pago-stat-label">Total facturado</span><span class="pago-stat-val">S/ ${totalPrecio.toFixed(2)}</span></div>
+      <div class="pago-stat"><span class="pago-stat-label">Total cobrado</span><span class="pago-stat-val pago-cobrado">S/ ${totalCobrado.toFixed(2)}</span></div>
+      <div class="pago-stat"><span class="pago-stat-label">Deuda pendiente</span><span class="pago-stat-val pago-deuda">S/ ${totalDeuda.toFixed(2)}</span></div>
+    </div>`;
+
+  Object.entries(grupos).forEach(([dia, items]) => {
+    const diaDeuda = items.reduce((a,p) => a + (p.deuda_sesion||0), 0);
+    html += `<div class="reg-grupo-fecha">📅 ${formatearFechaLarga(dia)}${diaDeuda > 0 ? ` <span class="pago-deuda-dia">· Deuda del día: S/ ${diaDeuda.toFixed(2)}</span>` : ''}</div>`;
+    items.forEach(p => {
+      const estadoPago = p.pagado === "si" ? "pago-completo" : p.pagado === "parcial" ? "pago-parcial" : "pago-pendiente";
+      const labelPago  = p.pagado === "si" ? "✔ Pagado" : p.pagado === "parcial" ? "⚡ Parcial" : "✘ Sin pagar";
+      const horaReg = p.fecha_pago ? p.fecha_pago.split(" ")[1].slice(0,5) : "";
+      html += `
+        <div class="reg-item pago-item ${estadoPago}">
+          <div class="reg-item-header">
+            <span class="reg-paciente">${p.paciente}</span>
+            <span class="reg-hora-reg">${horaReg}</span>
+          </div>
+          <div class="reg-item-info">
+            <span>📅 ${p.fecha_sesion} · 🕐 ${p.hora_inicio}</span>
+            ${p.procedimiento ? `<span class="reg-proc-badge">💆 ${p.procedimiento}</span>` : ""}
+            <span class="pago-badge ${estadoPago}">${labelPago}</span>
+          </div>
+          <div class="pago-montos">
+            <span>Precio: <b>S/ ${(p.precio_sesion||0).toFixed(2)}</b></span>
+            <span>Pagado: <b style="color:#137333">S/ ${(p.monto_pagado||0).toFixed(2)}</b></span>
+            ${p.deuda_sesion > 0 ? `<span>Debe: <b style="color:#a50e0e">S/ ${p.deuda_sesion.toFixed(2)}</b></span>` : ""}
+          </div>
+        </div>`;
+    });
+  });
+
+  pagosBody.innerHTML = html;
+}
+
+// ================================================
+// MODAL PAGO SESION
+// ================================================
+const modalPagoSesion    = document.getElementById("modalPagoSesion");
+const pagoSesionBody     = document.getElementById("pagoSesionBody");
+const closeBtnPagoSesion = document.getElementById("closeBtnPagoSesion");
+let pagoSesionCallback   = null;
+
+function cerrarModalPagoSesion() {
+  modalPagoSesion.classList.add("hidden");
+  pagoSesionBody.innerHTML = "";
+  pagoSesionCallback = null;
+}
+closeBtnPagoSesion.addEventListener("click", cerrarModalPagoSesion);
+modalPagoSesion.addEventListener("click", e => { if (e.target === modalPagoSesion) cerrarModalPagoSesion(); });
+
+function abrirModalPagoSesion(sesion, onDone) {
+  pagoSesionCallback = onDone;
+  const precio     = sesion.precio_sesion != null ? sesion.precio_sesion : "";
+  const pagadoMonto = sesion.monto_pagado || 0;
+  const estadoPago = sesion.pagado || "no";
+  const labelEstado = estadoPago === "si" ? `<span style="color:#137333;font-weight:600">✔ Pagado completo</span>`
+                    : estadoPago === "parcial" ? `<span style="color:#e67e00;font-weight:600">⚡ Pago parcial</span>`
+                    : `<span style="color:#a50e0e;font-weight:600">✘ Sin pagar</span>`;
+
+  pagoSesionBody.innerHTML = `
+    <div class="asistencia-header">
+      <div class="asistencia-icon">💰</div>
+      <h2>Registrar pago</h2>
+      <p class="asistencia-sub">Sesión del <b>${sesion.fecha_sesion}</b> · ${sesion.hora_inicio}</p>
+    </div>
+    ${estadoPago !== "no" ? `<div class="asistencia-estado-actual">Estado actual: ${labelEstado}</div>` : ""}
+    <div class="pago-form">
+      <div class="pago-form-row">
+        <label>Precio de la sesión (S/)</label>
+        <input type="number" min="0" step="0.01" id="inp_precio" placeholder="Ej: 80.00" value="${precio}"
+          style="width:100%;padding:12px 14px;border:1px solid #d8d8d8;border-radius:12px;outline:none;font:inherit;font-size:18px;text-align:right">
+      </div>
+      <div class="pago-form-row">
+        <label>Monto pagado (S/)</label>
+        <input type="number" min="0" step="0.01" id="inp_pagado" placeholder="Ej: 50.00" value="${pagadoMonto > 0 ? pagadoMonto : ""}"
+          style="width:100%;padding:12px 14px;border:1px solid #d8d8d8;border-radius:12px;outline:none;font:inherit;font-size:18px;text-align:right">
+      </div>
+      <div id="pago_preview" style="font-size:13px;margin-top:6px;text-align:right;font-weight:600"></div>
+    </div>
+    <div class="asistencia-botones" style="margin-top:16px">
+      <button class="btn-asistio" id="btnGuardarPago" style="flex:1">
+        <span class="btn-icon">💾</span><span>Guardar pago</span>
+      </button>
+    </div>
+  `;
+  modalPagoSesion.classList.remove("hidden");
+
+  const inpPrecio = document.getElementById("inp_precio");
+  const inpPagado = document.getElementById("inp_pagado");
+  const preview   = document.getElementById("pago_preview");
+
+  function actualizarPreview() {
+    const p = parseFloat(inpPrecio.value) || 0;
+    const g = parseFloat(inpPagado.value) || 0;
+    if (p > 0) {
+      const debe = Math.max(0, p - g);
+      preview.textContent = debe > 0 ? `Pendiente: S/ ${debe.toFixed(2)}` : "✔ Cubierto al 100%";
+      preview.style.color = debe > 0 ? "#a50e0e" : "#137333";
+    } else { preview.textContent = ""; }
+  }
+  inpPrecio.addEventListener("input", actualizarPreview);
+  inpPagado.addEventListener("input", actualizarPreview);
+  actualizarPreview();
+
+  document.getElementById("btnGuardarPago").onclick = async () => {
+    const precio_val = parseFloat(inpPrecio.value) || null;
+    const pagado_val = parseFloat(inpPagado.value) || 0;
+    const res = await fetch(`/sesion/pago/${sesion.id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ precio_sesion: precio_val, monto_pagado: pagado_val })
+    });
+    const r = await res.json();
+    cerrarModalPagoSesion();
+    mostrarNotificacion(
+      `💰 Pago guardado. Deuda total del paciente: S/ ${r.deuda_total.toFixed(2)}`,
+      r.deuda_total > 0 ? "" : "success"
+    );
+    if (pagoSesionCallback) pagoSesionCallback();
+  };
+}
+
+// ================================================
+// ================================================
+const input     = document.getElementById("search");
+const resultados = document.getElementById("resultados");
+
+input.addEventListener("input", async () => {
+  const query = input.value;
+  if (!query) { resultados.innerHTML = ""; return; }
+  const res  = await fetch(`/buscar?q=${encodeURIComponent(query)}`);
+  const data = await res.json();
+  resultados.innerHTML = "";
+  data.forEach(item => {
+    const div = document.createElement("div");
+    div.className = "item";
+    div.innerText = item;
+    div.onclick = () => { abrirModal(item, query); resultados.innerHTML = ""; input.value = ""; };
+    resultados.appendChild(div);
+  });
+});
+
+document.addEventListener("click", e => { if (!e.target.closest(".container")) resultados.innerHTML = ""; });
+
+// ================================================
+// ABRIR MODAL GENERAL
+// ================================================
+async function abrirModal(item, query) {
+  modal.classList.remove("hidden");
+
+  if (item.startsWith("➕")) {
+    // Extraer nombre real de la query (lo que escribió el usuario)
+    const nombreBuscado = query.trim();
+
+    // Intentar pre-rellenar si el paciente ya existe en la BD
+    let datosExistentes = null;
+    try {
+      const rBase = await fetch(`/paciente_base?nombre=${encodeURIComponent(nombreBuscado)}`);
+      const dBase = await rBase.json();
+      if (dBase.existe) datosExistentes = dBase;
+    } catch(e) {}
+
+    const d = datosExistentes || {};
+    const esExistente = !!datosExistentes;
+
+    modalBody.innerHTML = `
+      <h2>${esExistente ? "✏️ Actualizar paciente" : "➕ Crear Paciente"}</h2>
+      ${esExistente ? `<p style="font-size:13px;color:#1a73e8;margin-bottom:12px;background:#e8f0fe;padding:8px 12px;border-radius:10px;">
+        El paciente <b>${nombreBuscado}</b> ya existe. Puedes actualizar sus datos o agregar un nuevo procedimiento.</p>` : ""}
+
+      <form id="formCrear" class="form-grid" autocomplete="off">
+        <div class="form-span-2">
+          <input name="nombre" placeholder="Nombre" value="${d.nombre || nombreBuscado}" required>
+        </div>
+
+        <div class="form-span-2" style="border-top:1px solid #eee;padding-top:12px;margin-top:4px">
+          <b style="font-size:13px;color:#555">${esExistente ? "Nuevo procedimiento (dejar vacío para no agregar)" : "Procedimiento"}</b>
+        </div>
+        <input name="procedimiento" placeholder="Nombre del procedimiento"
+               value="${esExistente ? "" : (d.ultimo_procedimiento || "")}">
+        <input name="nro_sesiones" type="number" min="1" placeholder="Nro sesiones" value="${esExistente ? "" : (d.ultima_nro_sesiones || 1)}">
+
+        <div class="form-span-2" style="border-top:1px solid #eee;padding-top:12px;margin-top:4px">
+          <b style="font-size:13px;color:#555">Datos del paciente</b>
+        </div>
+        <input name="nro_whatsapp" placeholder="WhatsApp" value="${d.nro_whatsapp || ""}">
+        <input name="edad" type="number" min="0" placeholder="Edad" value="${d.edad || ""}">
+        <input name="tiene_diabetes" placeholder="Diabetes (si/no)" value="${d.tiene_diabetes || ""}">
+        <input name="tiene_hipertension" placeholder="Hipertensión (si/no)" value="${d.tiene_hipertension || ""}">
+        <div class="form-span-2">
+          <input name="antecedentes" placeholder="Antecedentes" value="${d.antecedentes || ""}">
+        </div>
+
+        <div class="form-span-2" style="border-top:1px solid #eee;padding-top:12px;margin-top:4px">
+          <b style="font-size:13px;color:#555">Primera sesión para este procedimiento (opcional)</b>
+        </div>
+        <input name="fecha_sesion" type="date">
+        <input name="hora_inicio" type="time">
+        <input name="duracion_minutos" type="number" min="15" value="60" placeholder="Duración min">
+        <div class="form-span-2">
+          <input name="notas" placeholder="Notas de la sesión">
+        </div>
+
+        <div class="form-actions form-span-2">
+          <button type="button" id="btnCancelar">Cancelar</button>
+          <button type="submit">${esExistente ? "Guardar cambios" : "Crear paciente"}</button>
+        </div>
+      </form>
+    `;
+
+    document.getElementById("btnCancelar").onclick = cerrarModal;
+    document.getElementById("formCrear").addEventListener("submit", async e => {
+      e.preventDefault();
+      const f = e.currentTarget;
+      const payload = {
+        nombre: f.nombre.value,
+        procedimiento: f.procedimiento.value,
+        nro_sesiones: f.nro_sesiones.value || 1,
+        nro_whatsapp: f.nro_whatsapp.value,
+        edad: f.edad.value || 0,
+        tiene_diabetes: f.tiene_diabetes.value,
+        tiene_hipertension: f.tiene_hipertension.value,
+        antecedentes: f.antecedentes.value,
+        fecha_sesion: f.fecha_sesion.value,
+        hora_inicio: f.hora_inicio.value,
+        duracion_minutos: f.duracion_minutos.value,
+        notas: f.notas.value
+      };
+      const res = await fetch("/crear_paciente", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) { const err = await res.json(); alert(err.detail || "Error"); return; }
+      const result = await res.json();
+      cerrarModal();
+      await actualizar();
+      mostrarNotificacion(result.es_nuevo ? `✔ Paciente "${result.nombre}" creado correctamente.` : `✔ Datos de "${result.nombre}" actualizados.`, "success");
+    });
+    return;
+  }
+
+  await cargarModalPaciente(item);
+}
+
+// ================================================
+// MODAL PACIENTE — VISTA COMPLETA
+// ================================================
+async function cargarModalPaciente(nombre) {
+  const res  = await fetch(`/paciente?nombre=${encodeURIComponent(nombre)}`);
+  const data = await res.json();
+  if (data.error) { modalBody.innerHTML = `<p>No encontrado.</p>`; return; }
+
+  const p    = data.paciente;
+  const procs = data.procedimientos || [];
+
+  modalBody.innerHTML = `
+    <div class="paciente-header">
+      <h2>${p.nombre}</h2>
+    </div>
+
+    <div class="datos-paciente">
+      <p><b>Registrado:</b> ${p.fecha || "—"}</p>
+      <p><b>WhatsApp:</b> ${p.nro_whatsapp || "—"}</p>
+      <p><b>Edad:</b> ${p.edad || "—"}</p>
+      <p><b>Diabetes:</b> ${p.tiene_diabetes || "—"}</p>
+      <p><b>Hipertensión:</b> ${p.tiene_hipertension || "—"}</p>
+      <p><b>Antecedentes:</b> ${p.antecedentes || "—"}</p>
+      <p class="${(p.deuda_total||0) > 0 ? 'dato-deuda-alerta' : 'dato-deuda-ok'}">
+        <b>💰 Deuda total:</b> S/ ${(p.deuda_total||0).toFixed(2)}
+      </p>
+    </div>
+
+    <div id="seccionProcedimientos">
+      ${procs.length ? procs.map(proc => renderProcCard(proc, nombre)).join("") : `<p style="color:#aaa;margin-bottom:16px;">Sin procedimientos registrados.</p>`}
+    </div>
+
+    <!-- Nuevo procedimiento -->
+    <div class="seccion-nuevo-proc" id="secNuevoProc">
+      <h3>➕ Agregar nuevo procedimiento</h3>
+      <p>Registra un procedimiento adicional para este paciente</p>
+      <button class="btn-expandir-proc" id="btnMostrarFormProc">Agregar procedimiento</button>
+      <div class="nuevo-proc-form hidden" id="formNuevoProcWrap">
+        <div class="form-grid">
+          <div class="form-span-2">
+            <input id="np_nombre" placeholder="Nombre del procedimiento" style="width:100%;padding:12px 14px;border:1px solid #d8d8d8;border-radius:12px;outline:none;font:inherit">
+          </div>
+          <input id="np_nro" type="number" min="1" value="1" placeholder="Nro sesiones" style="padding:12px 14px;border:1px solid #d8d8d8;border-radius:12px;outline:none;font:inherit">
+          <div style="display:flex;justify-content:flex-end">
+            <button class="btn-primary" id="btnGuardarNuevoProc">Guardar procedimiento</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Expandir form nuevo procedimiento
+  document.getElementById("btnMostrarFormProc").addEventListener("click", () => {
+    document.getElementById("formNuevoProcWrap").classList.toggle("hidden");
+  });
+
+  document.getElementById("btnGuardarNuevoProc").addEventListener("click", async () => {
+    const npNombre = document.getElementById("np_nombre").value.trim();
+    const npNro    = parseInt(document.getElementById("np_nro").value) || 1;
+    if (!npNombre) { alert("Escribe el nombre del procedimiento."); return; }
+
+    const res = await fetch("/procedimiento/nuevo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nombre_paciente: nombre, nombre_procedimiento: npNombre, nro_sesiones: npNro })
+    });
+    if (!res.ok) { const e = await res.json(); alert(e.detail || "Error"); return; }
+    await cargarModalPaciente(nombre);
+    mostrarNotificacion(`✔ Procedimiento "${npNombre}" agregado.`, "success");
+  });
+
+  // Adjuntar eventos a todos los botones de sesiones y asistencia
+  adjuntarEventosSesiones(procs, nombre);
+}
+
+function renderProcCard(proc, nombrePaciente) {
+  const asistidas    = proc.sesiones_asistidas;
+  const programadas  = proc.nro_sesiones;
+  const completado   = proc.estado === "completado";
+  const pct          = programadas > 0 ? Math.min(100, Math.round((asistidas / programadas) * 100)) : 0;
+  const barraClass   = completado ? "barra-progreso barra-completada" : "barra-progreso";
+
+  const badgeEstado = completado
+    ? `<span class="badge-completado">✔ Completado</span>`
+    : `<span class="badge-en-progreso">⏳ En progreso</span>`;
+
+  const sesionesHTML = proc.sesiones.length
+    ? proc.sesiones.map(s => renderSesionItem(s)).join("")
+    : `<p style="color:#aaa;font-size:13px;padding:8px 0">Sin sesiones programadas.</p>`;
+
+  return `
+    <div class="proc-card" id="proc-card-${proc.id}">
+      <div class="proc-card-header">
+        <div>
+          <div class="proc-card-titulo">💆 ${proc.nombre_procedimiento}</div>
+          <div class="proc-card-meta">Inicio: ${proc.fecha_inicio || "—"} · ${programadas} sesiones programadas</div>
+        </div>
+        ${badgeEstado}
+      </div>
+
+      <div class="contador-sesiones">
+        <div class="contador-info">
+          <span class="contador-num">${asistidas}</span>
+          <span class="contador-de">/ ${programadas}</span>
+          <span class="contador-label">sesiones asistidas</span>
+        </div>
+        <div class="barra-progreso-wrap">
+          <div class="${barraClass}" style="width:${pct}%"></div>
+        </div>
+      </div>
+
+      <div class="proc-sesiones-lista" id="sesiones-proc-${proc.id}">
+        ${sesionesHTML}
+      </div>
+
+      <div class="seccion-nueva-sesion">
+        <h4>➕ Programar nueva sesión</h4>
+        <div class="form-grid">
+          <input class="ns_fecha" data-proc="${proc.id}" type="date">
+          <input class="ns_hora"  data-proc="${proc.id}" type="time">
+          <input class="ns_dur"   data-proc="${proc.id}" type="number" min="15" value="60" placeholder="Duración min">
+          <input class="ns_notas" data-proc="${proc.id}" placeholder="Notas (opcional)">
+          <div class="form-actions form-span-2">
+            <button class="btn-primary btn-guardar-sesion" data-proc="${proc.id}"
+              data-proc-nombre="${proc.nombre_procedimiento}"
+              data-paciente="${nombrePaciente}">
+              Guardar sesión
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderSesionItem(s) {
+  let cls   = "";
+  let badge = "";
+  let btnLbl = "Registrar asistencia";
+
+  if (s.asistencia === "si") {
+    cls   = "sesion-asistio";
+    badge = `<span class="badge-asistio">✔ Asistió</span>`;
+    btnLbl = "Cambiar";
+  } else if (s.asistencia === "no") {
+    cls   = "sesion-no-asistio";
+    badge = `<span class="badge-no-asistio">✘ No asistió</span>`;
+    btnLbl = "Cambiar";
+  }
+
+  const fechaReg = s.fecha_registro
+    ? `<span class="reg-fecha-mini">Registrado: ${s.fecha_registro}</span>` : "";
+
+  // Info de pago
+  let pagoBadge = "";
+  let pagoInfo  = "";
+  if (s.precio_sesion != null) {
+    const estadoPago = s.pagado === "si" ? "pago-completo" : s.pagado === "parcial" ? "pago-parcial" : "pago-pendiente";
+    const labelPago  = s.pagado === "si" ? "✔ Pagado" : s.pagado === "parcial" ? "⚡ Parcial" : "✘ Sin pagar";
+    pagoBadge = `<span class="pago-badge-mini ${estadoPago}">${labelPago}</span>`;
+    const debe = Math.max(0, (s.precio_sesion||0) - (s.monto_pagado||0));
+    pagoInfo = `<span class="sesion-pago-info">S/ ${(s.precio_sesion||0).toFixed(2)}${debe > 0 ? ` · Debe S/ ${debe.toFixed(2)}` : ""}</span>`;
+  }
+
+  return `
+    <div class="sesion-item ${cls}">
+      <div class="sesion-item-header">
+        <div>
+          <span class="sesion-fecha-hora">📅 ${s.fecha_sesion} · 🕐 ${s.hora_inicio} · ⏱ ${s.duracion_minutos} min</span>
+          ${s.notas ? `<span class="sesion-notas">📝 ${s.notas}</span>` : ""}
+          ${fechaReg}
+          ${pagoInfo}
+        </div>
+        <div class="sesion-item-acciones">
+          ${badge}
+          ${pagoBadge}
+          <button class="btn-marcar-asistencia" data-sesion-id="${s.id}">${btnLbl}</button>
+          <button class="btn-pago-sesion" data-sesion-id="${s.id}" title="Registrar pago">💰</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function adjuntarEventosSesiones(procs, nombre) {
+  // Botones guardar nueva sesión
+  document.querySelectorAll(".btn-guardar-sesion").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const procId    = btn.dataset.proc;
+      const procNombre = btn.dataset.procNombre;
+      const paciente  = btn.dataset.paciente;
+      const fecha  = document.querySelector(`.ns_fecha[data-proc="${procId}"]`).value;
+      const hora   = document.querySelector(`.ns_hora[data-proc="${procId}"]`).value;
+      const dur    = document.querySelector(`.ns_dur[data-proc="${procId}"]`).value;
+      const notas  = document.querySelector(`.ns_notas[data-proc="${procId}"]`).value;
+
+      if (!fecha || !hora) { alert("Fecha y hora son obligatorias."); return; }
+
+      await fetch("/sesion/nueva", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre_paciente: paciente,
+          procedimiento_id: parseInt(procId),
+          fecha_sesion: fecha,
+          hora_inicio: hora,
+          duracion_minutos: parseInt(dur) || 60,
+          procedimiento: procNombre,
+          notas: notas
+        })
+      });
+      await cargarModalPaciente(nombre);
+      await actualizar();
+    });
+  });
+
+  // Botones marcar asistencia (dentro del modal paciente)
+  document.querySelectorAll(".btn-marcar-asistencia").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const sesionId = parseInt(btn.dataset.sesionId);
+      let sesion = null;
+      for (const proc of procs) {
+        sesion = proc.sesiones.find(s => s.id === sesionId);
+        if (sesion) break;
+      }
+      if (!sesion) return;
+      sesion.paciente = nombre;
+      abrirModalAsistencia(sesion, async () => {
+        await cargarModalPaciente(nombre);
+        await actualizar();
+      });
+    });
+  });
+
+  // Botones de pago por sesión
+  document.querySelectorAll(".btn-pago-sesion").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const sesionId = parseInt(btn.dataset.sesionId);
+      let sesion = null;
+      for (const proc of procs) {
+        sesion = proc.sesiones.find(s => s.id === sesionId);
+        if (sesion) break;
+      }
+      if (!sesion) return;
+      abrirModalPagoSesion(sesion, async () => {
+        await cargarModalPaciente(nombre);
+        await actualizar();
+      });
+    });
+  });
+}
+
+// ================================================
+// UTILIDADES FECHA
+// ================================================
+function lunesDe(fecha) {
+  const d = new Date(fecha);
+  const dow = d.getDay();
+  d.setDate(d.getDate() + (dow === 0 ? -6 : 1 - dow));
+  d.setHours(0,0,0,0);
+  return d;
+}
+
+function agregarDias(fecha, n) {
+  const d = new Date(fecha);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
+function formatoFechaISO(d) { return d.toISOString().split("T")[0]; }
+
+function colorPaciente(nombre) {
+  if (!(nombre in colorMap)) { colorMap[nombre] = colorIdx++ % 6; }
+  return colorMap[nombre];
+}
+
+function formatearFechaLarga(iso) {
+  if (!iso || iso === "Sin fecha") return "Sin fecha";
+  const [y, m, d] = iso.split("-");
+  return `${parseInt(d)} de ${MESES[parseInt(m)-1]} de ${y}`;
+}
+
+function mostrarNotificacion(msg, tipo) {
+  const n = document.createElement("div");
+  n.className = `notificacion notificacion-${tipo}`;
+  n.textContent = msg;
+  document.body.appendChild(n);
+  setTimeout(() => n.classList.add("visible"), 30);
+  setTimeout(() => { n.classList.remove("visible"); setTimeout(() => n.remove(), 400); }, 4000);
+}
+
+// ================================================
+// CALENDARIO — RENDER
+// ================================================
+function renderCabecera() {
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const header = document.getElementById("cal-days-header");
+  header.innerHTML = '<div></div>';
+  for (let i = 0; i < 6; i++) {
+    const dia = agregarDias(semanaActual, i);
+    const esHoy = dia.getTime() === hoy.getTime();
+    const div = document.createElement("div");
+    div.className = "cal-day-label" + (esHoy ? " hoy" : "");
+    div.innerHTML = `<div class="dow">${DIAS[i]}</div><div class="dom">${dia.getDate()}</div>`;
+    header.appendChild(div);
+  }
+  const fin = agregarDias(semanaActual, 5);
+  document.getElementById("cal-titulo").textContent =
+    `${semanaActual.getDate()} – ${fin.getDate()} de ${MESES[fin.getMonth()]} ${fin.getFullYear()}`;
+  document.getElementById("cal-subtitulo").textContent =
+    `Semana del ${MESES[semanaActual.getMonth()]}`;
+}
+
+function renderGrilla() {
+  const grid = document.getElementById("cal-grid");
+  grid.innerHTML = "";
+  for (let h = HORA_INICIO; h < HORA_FIN; h++) {
+    const label = document.createElement("div");
+    label.className = "cal-time-label";
+    label.textContent = h < 12 ? `${h} AM` : h === 12 ? "12 PM" : `${h-12} PM`;
+    grid.appendChild(label);
+    for (let d = 0; d < 6; d++) {
+      const cell = document.createElement("div");
+      cell.className = "cal-cell";
+      cell.dataset.hora = h; cell.dataset.dia = d;
+      grid.appendChild(cell);
+    }
+  }
+}
+
+async function cargarSemana() {
+  const iso = formatoFechaISO(semanaActual);
+  const res  = await fetch(`/calendario?fecha_inicio=${iso}`);
+  const data = await res.json();
+  sesionesCache = data.sesiones;
+  renderBloques();
+}
+
+function renderBloques() {
+  document.querySelectorAll(".sesion-bloque").forEach(b => b.remove());
+  sesionesCache.forEach(s => {
+    const [h, m] = s.hora_inicio.split(":").map(Number);
+    if (h < HORA_INICIO || h >= HORA_FIN) return;
+    const filaHora = h - HORA_INICIO;
+    const fechaSesion = new Date(s.fecha + "T00:00:00");
+    const dow = fechaSesion.getDay();
+    const col = dow === 0 ? -1 : dow - 1;
+    if (col < 0 || col > 5) return;
+    const cells = document.querySelectorAll(".cal-cell");
+    const cell  = cells[filaHora * 6 + col];
+    if (!cell) return;
+
+    const topPx  = (m / 60) * PX_POR_HORA;
+    const altoPx = Math.max((s.duracion_minutos / 60) * PX_POR_HORA - 4, 20);
+
+    let claseColor = `color-${colorPaciente(s.paciente)}`;
+    if (s.asistencia === "si") claseColor = "color-asistio";
+    else if (s.asistencia === "no") claseColor = "color-no-asistio";
+
+    const bloque = document.createElement("div");
+    bloque.className = `sesion-bloque ${claseColor}`;
+    bloque.style.top = topPx + "px";
+    bloque.style.height = altoPx + "px";
+    bloque.innerHTML = `
+      <div class="sb-nombre">${s.paciente}</div>
+      <div class="sb-hora">${s.hora_inicio} · ${s.duracion_minutos} min</div>
+      ${s.procedimiento ? `<div class="sb-proc">${s.procedimiento}</div>` : ""}
+      ${s.asistencia === "si" ? `<div class="sb-asistencia sb-asistio">✔</div>` : ""}
+      ${s.asistencia === "no" ? `<div class="sb-asistencia sb-no-asistio">✘</div>` : ""}
+    `;
+
+    bloque.addEventListener("mouseenter", e => mostrarPopup(e, s));
+    bloque.addEventListener("mouseleave", ocultarPopup);
+    bloque.addEventListener("click", () => {
+      ocultarPopup();
+      abrirModalAsistencia(s, async () => await actualizar());
+    });
+    cell.appendChild(bloque);
+  });
+  renderLineaActual();
+}
+
+function renderLineaActual() {
+  document.querySelectorAll(".cal-now-line").forEach(l => l.remove());
+  const hoy = new Date();
+  if (formatoFechaISO(lunesDe(hoy)) !== formatoFechaISO(semanaActual)) return;
+  const h = hoy.getHours(), m = hoy.getMinutes();
+  if (h < HORA_INICIO || h >= HORA_FIN) return;
+  const col = hoy.getDay() - 1;
+  if (col < 0 || col > 5) return;
+  const cells = document.querySelectorAll(".cal-cell");
+  const cell  = cells[(h - HORA_INICIO) * 6 + col];
+  if (!cell) return;
+  const linea = document.createElement("div");
+  linea.className = "cal-now-line";
+  linea.style.top = ((m / 60) * PX_POR_HORA) + "px";
+  linea.innerHTML = '<div class="cal-now-dot"></div>';
+  cell.appendChild(linea);
+}
+
+function mostrarPopup(e, s) {
+  const pop = document.getElementById("sesion-popup");
+  document.getElementById("sp-nombre").textContent = s.paciente;
+  document.getElementById("sp-fecha").textContent  = s.fecha;
+  document.getElementById("sp-hora").textContent   = s.hora_inicio;
+  document.getElementById("sp-dur").textContent    = s.duracion_minutos + " min";
+  document.getElementById("sp-proc").textContent   = s.procedimiento || "—";
+  const est = document.getElementById("sp-estado");
+  est.textContent = s.asistencia === "si" ? "✔ Asistió" : s.asistencia === "no" ? "✘ No asistió" : "Sin registrar";
+  pop.style.left = (e.clientX + 16) + "px";
+  pop.style.top  = (e.clientY - 20) + "px";
+  pop.classList.add("visible");
+}
+
+function ocultarPopup() { document.getElementById("sesion-popup").classList.remove("visible"); }
+
+// Navegación
+document.getElementById("btn-ant").addEventListener("click", () => { semanaActual = agregarDias(semanaActual,-7); actualizar(); });
+document.getElementById("btn-sig").addEventListener("click", () => { semanaActual = agregarDias(semanaActual, 7); actualizar(); });
+document.getElementById("btn-hoy").addEventListener("click", () => { semanaActual = lunesDe(new Date()); actualizar(); });
+
+function actualizar() { renderCabecera(); renderGrilla(); cargarSemana(); }
+
+// INIT
+actualizar();
+setTimeout(() => { document.getElementById("cal-grid").scrollTop = 0; }, 100);
+setInterval(renderLineaActual, 60000);
+</script>
+</body>
+</html>
